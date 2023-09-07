@@ -19,6 +19,10 @@ impl TokenType{
         Self::Literal(number)
     }
 
+    pub fn new_string_literal(text: &str) -> TokenType{
+        Self::Literal(Literal::String(text.to_owned()))
+    }
+
     pub fn new_operator(text: char) -> TokenType{
         match text{
             '+' => TokenType::Operator(Operator::Add),

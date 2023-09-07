@@ -36,6 +36,7 @@ impl Lexer{
                 //not call advance() when another function is called to parse the characters
                 //as they call advance() on their own
                 '0'..='9' => Some(self.parse_number()),
+                '"' | '\'' => Some(self.parse_string()),
                 '+' | '-' | '/' | '*' => {
                     let ch = ch;
                     self.advance();
@@ -82,6 +83,24 @@ impl Lexer{
         return TokenType::new_number_literal(number.as_str());
     }
 
+    fn parse_string(&mut self) -> TokenType{
+        let mut string: String = String::new();
+        let start_char = self.current_char.unwrap();
+        self.advance();
+        while let Some(ch) = self.current_char{
+            if ch == start_char{
+                //advance before returning to consume the ending character
+                self.advance();
+                return TokenType::new_string_literal(string.as_str());
+            } else {
+                self.advance();
+                string.push(ch);
+            }
+        }
+        //return an error for unterminated string
+        TokenType::Error
+    }
+
     //function to advance the pos attribute and update the current character
     fn advance(&mut self) {
         self.pos += 1;
@@ -119,6 +138,25 @@ mod tests{
         assert_eq!(TokenType::Error, lexer.parse_number());
     }
 
+    //test the parse_string function
+    #[test]
+    fn str_parse(){
+        //parse valid strings
+        let mut lexer = Lexer::new("\"Hello\"");
+        assert_eq!(TokenType::new_string_literal("Hello"), lexer.parse_string());
+        lexer = Lexer::new("\'Hello\'");
+        assert_eq!(TokenType::new_string_literal("Hello"), lexer.parse_string());
+        lexer = Lexer::new("\'Hello\"\'");
+        assert_eq!(TokenType::new_string_literal("Hello\""), lexer.parse_string());
+
+        //parse invalid strings
+        lexer = Lexer::new("\'Hello");
+        assert_eq!(TokenType::Error, lexer.parse_string());
+        lexer = Lexer::new("\'Hello\"");
+        assert_eq!(TokenType::Error, lexer.parse_string());
+    }
+
+    //compare the expected and resulted vectors one element at a time
     pub fn compare_lexer_outputs(expected: Vec<Token>, result: Vec<Token>) -> bool{
         if expected.len() == result.len(){
             let combined = expected.iter().zip(result.iter());
