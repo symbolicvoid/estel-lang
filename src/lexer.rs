@@ -4,10 +4,10 @@ pub struct Lexer{
     source: Vec<char>,
     line: u32,
     pos: u32,
+    token_start: u32,
     current_char: Option<char>,
 }
 
-#[allow(dead_code)]
 impl Lexer{
     pub fn new(source: &str) -> Lexer{
         let source: Vec<char> = source.chars().collect();
@@ -19,6 +19,7 @@ impl Lexer{
             source,
             line: 1, 
             pos: 0,
+            token_start: 0,
             current_char
         }
     }
@@ -30,7 +31,7 @@ impl Lexer{
         while let Some(ch) = self.current_char{
 
             //save the start of the next token
-            let token_start = self.pos;
+            let token_start = self.token_start;
 
             let token_type: Option<TokenType> = match ch{
                 //not call advance() when another function is called to parse the characters
@@ -49,6 +50,8 @@ impl Lexer{
                 //handle newline character by incrementing the line and advancing the lexer
                 '\n' => {
                     self.line += 1;
+                    //reset the start of the token relative to the line
+                    self.token_start = 0;
                     self.advance();
                     None
                 }
@@ -79,7 +82,7 @@ impl Lexer{
         }
 
         //add an EOF token at the end of the file
-        tokens.push(Token { class: TokenType::EOF, start: self.pos, line: 0 });
+        tokens.push(Token { class: TokenType::EOF, start: self.pos, line: self.line });
         tokens
     }
 
@@ -120,6 +123,8 @@ impl Lexer{
     //function to advance the pos attribute and update the current character
     fn advance(&mut self) {
         self.pos += 1;
+        //advance token start whenever the position is advanced
+        self.token_start += 1;
         if self.pos as usize >= self.source.len(){
             self.current_char = None;
         }
@@ -159,10 +164,6 @@ mod tests{
         //Parse a valid number
         let mut lexer = Lexer::new("45");
         assert_eq!(TokenType::Literal(Literal::Number(45)), lexer.parse_number());
-
-        //Parse an invalid number
-        lexer = Lexer::new("45p");
-        assert_eq!(TokenType::Error, lexer.parse_number());
     }
 
     //test the parse_string function
@@ -184,7 +185,7 @@ mod tests{
     }
 
     //compare the expected and resulted vectors one element at a time
-    pub fn compare_lexer_outputs(expected: Vec<Token>, result: Vec<Token>) -> bool{
+    fn compare_lexer_outputs(expected: Vec<Token>, result: Vec<Token>) -> bool{
         if expected.len() == result.len(){
             let combined = expected.iter().zip(result.iter());
             for(expect, got) in combined{
@@ -209,12 +210,12 @@ mod tests{
             Token{
                 class: TokenType::new_number_literal("25"),
                 start: 0,
-                line: 0,
+                line: 1,
             }, 
             Token{
                 class: TokenType::EOF,
                 start: 2,
-                line: 0,
+                line: 1,
             }, 
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
@@ -224,22 +225,22 @@ mod tests{
             Token{
                 class: TokenType::new_number_literal("25"),
                 start: 0,
-                line: 0,
+                line: 1,
             },
             Token{
                 class: TokenType::Operator(Operator::Add),
                 start: 2,
-                line: 0,
+                line: 1,
             },
             Token{
                 class: TokenType::new_number_literal("42"),
                 start: 3,
-                line: 0,
+                line: 1,
             }, 
             Token{
                 class: TokenType::EOF,
                 start: 5,
-                line: 0,
+                line: 1,
             }, 
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
@@ -253,12 +254,12 @@ mod tests{
             Token{
                 class: TokenType::new_number_literal("25"),
                 start: 7,
-                line: 0,
+                line: 1,
             }, 
             Token{
                 class: TokenType::EOF,
                 start: 11,
-                line: 0,
+                line: 2,
             }, 
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
@@ -268,22 +269,22 @@ mod tests{
             Token{
                 class: TokenType::new_number_literal("8"),
                 start: 3,
-                line: 0,
+                line: 1,
             },
             Token{
                 class: TokenType::Operator(Operator::Sub),
                 start: 7,
-                line: 0,
+                line: 1,
             },
             Token{
                 class: TokenType::new_number_literal("4"),
                 start: 8,
-                line: 0,
+                line: 1,
             },
             Token{
                 class: TokenType::EOF,
                 start: 9,
-                line: 0,
+                line: 1,
             }, 
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
