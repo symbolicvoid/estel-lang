@@ -2,7 +2,7 @@
 pub struct Token{
     pub class: TokenType,
     pub start: u32,
-    pub span: u32,
+    pub line: u32,
 }
 
 #[derive(Debug, PartialEq, Clone)]
