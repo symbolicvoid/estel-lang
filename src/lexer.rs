@@ -1,5 +1,11 @@
 use crate::token::*;
 
+//source: The source code as a vector of characters
+//line: The line number the lexer is currently at
+//pos: The position of the character the lexer is currently at
+//token_start: Store the start for the next token
+//current_char: The character at the current position of the lexer, 
+//              set to None once the source ends
 pub struct Lexer{
     source: Vec<char>,
     line: u32,
@@ -34,10 +40,10 @@ impl Lexer{
             let token_start = self.token_start;
 
             let token_type: Option<TokenType> = match ch{
-                //not call advance() when another function is called to parse the characters
+                //not call advance() when another function is called to lex the characters
                 //as they call advance() on their own
-                '0'..='9' => Some(self.parse_number()),
-                '"' | '\'' => Some(self.parse_string()),
+                '0'..='9' => Some(self.lex_number()),
+                '"' | '\'' => Some(self.lex_string()),
                 '+' | '-' | '/' | '*' => {
                     let ch = ch;
                     self.advance();
@@ -86,7 +92,7 @@ impl Lexer{
         tokens
     }
 
-    fn parse_number(&mut self) -> TokenType{
+    fn lex_number(&mut self) -> TokenType{
         let mut number = String::new();
         while let Some(ch) = self.current_char{
             match ch{
@@ -102,7 +108,7 @@ impl Lexer{
         return TokenType::new_number_literal(number.as_str());
     }
 
-    fn parse_string(&mut self) -> TokenType{
+    fn lex_string(&mut self) -> TokenType{
         let mut string: String = String::new();
         let start_char = self.current_char.unwrap();
         self.advance();
@@ -158,48 +164,50 @@ impl Lexer{
 mod tests{
     use super::*;
 
-    //test the parse_number function
+    //test the lex_number function
     #[test]
-    fn num_parse(){
-        //Parse a valid number
+    fn num_lex(){
+        //lex a valid number
         let mut lexer = Lexer::new("45");
-        assert_eq!(TokenType::Literal(Literal::Number(45)), lexer.parse_number());
+        assert_eq!(TokenType::Literal(Literal::Number(45)), lexer.lex_number());
     }
 
-    //test the parse_string function
+    //test the lex_string function
     #[test]
-    fn str_parse(){
-        //parse valid strings
+    fn str_lex(){
+        //lex valid strings
         let mut lexer = Lexer::new("\"Hello\"");
-        assert_eq!(TokenType::new_string_literal("Hello"), lexer.parse_string());
+        assert_eq!(TokenType::new_string_literal("Hello"), lexer.lex_string());
         lexer = Lexer::new("\'Hello\'");
-        assert_eq!(TokenType::new_string_literal("Hello"), lexer.parse_string());
+        assert_eq!(TokenType::new_string_literal("Hello"), lexer.lex_string());
         lexer = Lexer::new("\'Hello\"\'");
-        assert_eq!(TokenType::new_string_literal("Hello\""), lexer.parse_string());
+        assert_eq!(TokenType::new_string_literal("Hello\""), lexer.lex_string());
 
-        //parse invalid strings
+        //lex invalid strings
         lexer = Lexer::new("\'Hello");
-        assert_eq!(TokenType::Error, lexer.parse_string());
+        assert_eq!(TokenType::Error, lexer.lex_string());
         lexer = Lexer::new("\'Hello\"");
-        assert_eq!(TokenType::Error, lexer.parse_string());
+        assert_eq!(TokenType::Error, lexer.lex_string());
     }
 
     //compare the expected and resulted vectors one element at a time
+    //prints all failed token comparisons
     fn compare_lexer_outputs(expected: Vec<Token>, result: Vec<Token>) -> bool{
+        let mut pass = true;
         if expected.len() == result.len(){
             let combined = expected.iter().zip(result.iter());
             for(expect, got) in combined{
                 if expect != got{
                     println!("Token test case failed!");
                     println!("expect: {:?}, got: {:?}", expect, got);
-                    return false;
+                    pass = false;
                 }
             }
-            true
         } else {
             println!("expected length: {}, got: {}", expected.len(), result.len());
-            false
+            pass = false;
         }
+        pass
     }
 
     //tests for lexing basic numeric operations
@@ -228,7 +236,7 @@ mod tests{
                 line: 1,
             },
             Token{
-                class: TokenType::Operator(Operator::Add),
+                class: TokenType::new_operator('+'),
                 start: 2,
                 line: 1,
             },
@@ -246,7 +254,7 @@ mod tests{
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
     }
 
-    //test if the lexer can parse whitespaces correctly
+    //test if the lexer can skip whitespaces correctly
     #[test]
     fn test_whitespace_skips(){
         let mut lexer = Lexer::new("       25 \n");
@@ -272,7 +280,7 @@ mod tests{
                 line: 1,
             },
             Token{
-                class: TokenType::Operator(Operator::Sub),
+                class: TokenType::new_operator('-'),
                 start: 7,
                 line: 1,
             },

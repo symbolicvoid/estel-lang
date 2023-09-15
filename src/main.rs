@@ -11,10 +11,16 @@ fn main(){
             io::stdin()
                 .read_line(&mut input)
                 .expect("failed to read input");
-            tokens = run_prompt(&input);
-            println!("Out:");
-            for token in tokens{
-                println!("{:?}", token)
+            match input.as_str(){
+                //q or quit to close the shell
+                "q\r\n" | "quit\r\n" => return,
+                _ => {
+                    tokens = run_prompt(&input);
+                    println!("Out:");
+                    for token in tokens{
+                        println!("{:?}", token)
+                    }
+                }
             }
         }
     }
