@@ -4,8 +4,7 @@ use crate::token::*;
 //line: The line number the lexer is currently at
 //pos: The position of the character the lexer is currently at
 //token_start: Store the start for the next token
-//current_char: The character at the current position of the lexer, 
-//              set to None once the source ends
+//current_char: The character at the current position of the lexer, set to None once the source ends
 pub struct Lexer{
     source: Vec<char>,
     line: u32,
@@ -68,13 +67,14 @@ impl Lexer{
                 }
                 //error for unrecognized characters
                 _ => {
-                    Some(TokenType::Error)
+                    Some(TokenType::Error(ErrorType::InvalidTokenError))
                 }
             };
             if let Some(token_type) = token_type{
                 //synchronize to the next token after whitespace when error occurs
-                if token_type == TokenType::Error{
-                    self.synchronize_position();
+                match token_type{
+                    TokenType::Error(_) => self.synchronize_position(),
+                    _ => {}
                 }
 
                 tokens.push(
@@ -123,7 +123,7 @@ impl Lexer{
             }
         }
         //return an error for unterminated string
-        TokenType::Error
+        TokenType::Error(ErrorType::UnterminatedStringError)
     }
 
     //function to advance the pos attribute and update the current character
@@ -185,9 +185,9 @@ mod tests{
 
         //lex invalid strings
         lexer = Lexer::new("\'Hello");
-        assert_eq!(TokenType::Error, lexer.lex_string());
+        assert_eq!(TokenType::Error(ErrorType::UnterminatedStringError), lexer.lex_string());
         lexer = Lexer::new("\'Hello\"");
-        assert_eq!(TokenType::Error, lexer.lex_string());
+        assert_eq!(TokenType::Error(ErrorType::UnterminatedStringError), lexer.lex_string());
     }
 
     //compare the expected and resulted vectors one element at a time

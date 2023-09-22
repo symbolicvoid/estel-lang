@@ -1,9 +1,8 @@
 use std::{io, fs, env};
-use estel::{lexer::*, token::Token};
+use estel::interpreter::Interpreter;
 
 fn main(){
     let args: Vec<String> = env::args().collect();
-    let mut tokens;
     if args.len() == 1{
         //run the prompt version for no arguments
         loop {
@@ -15,34 +14,27 @@ fn main(){
                 //q or quit to close the shell
                 "q\r\n" | "quit\r\n" => return,
                 _ => {
-                    tokens = run_prompt(&input);
-                    println!("Out:");
-                    for token in tokens{
-                        println!("{:?}", token)
-                    }
+                    run_prompt(input);
                 }
             }
         }
     }
     else {
-        tokens = run_file(&args[1]);
-        println!("Out:");
-        for token in tokens{
-            println!("{:?}", token)
-        }
+        run_file(&args[1]);
     }
 }
 
-fn run_file(file: &str) -> Vec<Token>{
+fn run_file(file: &str){
     let contents = fs::read_to_string(file)
                                 .expect("Error occured when reading the file");
-    run_code(contents.as_str())
+    run_code(contents);
 }
 
-fn run_code(code: &str) -> Vec<Token>{
-    Lexer::new(code).lex()
+fn run_code(code: String){
+   let mut interpreter = Interpreter::new(code);
+   interpreter.interpret();
 }
 
-fn run_prompt(input: &str) -> Vec<Token>{
-    run_code(input)
+fn run_prompt(input: String){
+    run_code(input);
 }
