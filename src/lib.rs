@@ -1,5 +1,3 @@
-mod token;
-mod expr;
-mod lexer;
+use parser::{lexer, token};
 mod parser;
 pub mod interpreter;

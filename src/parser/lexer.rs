@@ -1,4 +1,4 @@
-use crate::token::*;
+use super::token::*;
 
 //source: The source code as a vector of characters
 //line: The line number the lexer is currently at
@@ -67,7 +67,7 @@ impl Lexer{
                 }
                 //error for unrecognized characters
                 _ => {
-                    Some(TokenType::Error(ErrorType::InvalidTokenError))
+                    Some(TokenType::Error(TokenErrorType::InvalidTokenError))
                 }
             };
             if let Some(token_type) = token_type{
@@ -123,7 +123,7 @@ impl Lexer{
             }
         }
         //return an error for unterminated string
-        TokenType::Error(ErrorType::UnterminatedStringError)
+        TokenType::Error(TokenErrorType::UnterminatedStringError)
     }
 
     //function to advance the pos attribute and update the current character
@@ -185,9 +185,9 @@ mod tests{
 
         //lex invalid strings
         lexer = Lexer::new("\'Hello");
-        assert_eq!(TokenType::Error(ErrorType::UnterminatedStringError), lexer.lex_string());
+        assert_eq!(TokenType::Error(TokenErrorType::UnterminatedStringError), lexer.lex_string());
         lexer = Lexer::new("\'Hello\"");
-        assert_eq!(TokenType::Error(ErrorType::UnterminatedStringError), lexer.lex_string());
+        assert_eq!(TokenType::Error(TokenErrorType::UnterminatedStringError), lexer.lex_string());
     }
 
     //compare the expected and resulted vectors one element at a time

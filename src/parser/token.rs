@@ -9,7 +9,7 @@ pub struct Token{
 pub enum TokenType{
     Literal(Literal),
     Operator(Operator),
-    Error(ErrorType),
+    Error(TokenErrorType),
     EOF,
 }
 
@@ -29,18 +29,18 @@ impl TokenType{
             '-' => TokenType::Operator(Operator::Sub),
             '*' => TokenType::Operator(Operator::Mul),
             '/' => TokenType::Operator(Operator::Div),
-            _ => TokenType::Error(ErrorType::InvalidTokenError),
+            _ => TokenType::Error(TokenErrorType::InvalidTokenError),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum ErrorType{
+pub enum TokenErrorType{
     InvalidTokenError,
     UnterminatedStringError,
 }
 
-impl ErrorType{
+impl TokenErrorType{
     pub fn get_message(&self) -> &str{
         match self{
             Self::InvalidTokenError => "Unrecognized character",
