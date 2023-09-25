@@ -88,7 +88,7 @@ impl Lexer{
         }
 
         //add an EOF token at the end of the file
-        tokens.push(Token { class: TokenType::EOF, start: self.pos, line: self.line });
+        tokens.push(Token { class: TokenType::Eof, start: self.pos, line: self.line });
         tokens
     }
 
@@ -221,7 +221,7 @@ mod tests{
                 line: 1,
             }, 
             Token{
-                class: TokenType::EOF,
+                class: TokenType::Eof,
                 start: 2,
                 line: 1,
             }, 
@@ -246,7 +246,7 @@ mod tests{
                 line: 1,
             }, 
             Token{
-                class: TokenType::EOF,
+                class: TokenType::Eof,
                 start: 5,
                 line: 1,
             }, 
@@ -265,7 +265,7 @@ mod tests{
                 line: 1,
             }, 
             Token{
-                class: TokenType::EOF,
+                class: TokenType::Eof,
                 start: 11,
                 line: 2,
             }, 
@@ -290,7 +290,7 @@ mod tests{
                 line: 1,
             },
             Token{
-                class: TokenType::EOF,
+                class: TokenType::Eof,
                 start: 9,
                 line: 1,
             }, 

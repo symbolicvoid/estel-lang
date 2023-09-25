@@ -30,14 +30,11 @@ impl Interpreter{
     fn check_lex_errors(&self) -> bool{
         let mut error = false;
         for token in self.tokens.iter(){
-            match &token.class{
-                TokenType::Error(err_type) => {
-                    eprintln!("\x1b[0;31mError: {} at line {} position {}\x1b[0m", 
-                        err_type.get_message(), token.line, token.start
-                    );
-                    error = true;
-                }
-                _ => {}
+            if let TokenType::Error(err_type) = &token.class {
+                eprintln!("\x1b[0;31mError: {} at line {} position {}\x1b[0m", 
+                    err_type.get_message(), token.line, token.start
+                );
+                error = true;
             }
         }
         error

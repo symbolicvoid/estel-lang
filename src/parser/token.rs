@@ -10,7 +10,7 @@ pub enum TokenType{
     Literal(Literal),
     Operator(Operator),
     Error(TokenErrorType),
-    EOF,
+    Eof,
 }
 
 impl TokenType{
@@ -49,7 +49,7 @@ impl TokenErrorType{
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Literal{
     Number(i32),
     String(String),

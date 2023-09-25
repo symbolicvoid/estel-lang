@@ -6,41 +6,79 @@ pub struct Parser{
     pos: u32,
 }
 
+#[allow(unused)]
 impl Parser{
     pub fn new(tokens: Vec<Token>) -> Parser{
         Self { tokens, pos: 0 }
     }
 
-
     //parse the tokens into an expression
-    pub fn parse(&mut self) -> Expr{
-        Expr { expr: ExprType::new_num_literal(8) }
+    pub fn parse(&mut self) -> Option<Expr>{
+        self.expr()
     }
 
-    fn peek(&self) -> &TokenType{
-        let pos = self.pos as usize + 1;
-        if self.is_eof(pos){
-            &TokenType::EOF
-        } else {
-            &self.tokens[pos].class
+    fn expr(&mut self) -> Option<Expr>{
+        let expr: Expr;
+        match &self.get_current_token().class{
+            TokenType::Literal(left) => {
+                //match the next token
+                match &self.get_current_token().class{
+                    TokenType::Operator(opr) => {
+                        let right = match &self.peek().class{
+                            TokenType::Literal(right) => {
+                                right
+                            },
+                            _ => {
+                                return None;
+                            }
+                        };
+                        expr = Expr::new_binary_op(left, right, opr);
+                        if let Some(next_expr) = self.expr(){
+                            return Some(expr.merge(next_expr));
+                        } else {
+                            return Some(expr);
+                        }
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            }
+            _ => {
+                None
+            }
         }
     }
 
-    fn advance(&mut self) ->  &TokenType{
+    fn peek(&self) -> &Token{
+        let pos = self.pos as usize + 1;
+        if self.is_eof(pos){
+            &self.tokens[self.tokens.len() - 1]
+        } else {
+            &self.tokens[pos]
+        }
+    }
+
+    //advances the position and returns the consumed token
+    fn consume(&mut self) -> &Token{
+        let consumed = &self.tokens[self.pos as usize];
+        self.pos += 1;
+        consumed
+    }
+
+
+    //return the token at the current pos
+    //return the last EOF otherwise
+    fn get_current_token(&self) -> &Token{
         let pos = self.pos as usize;
         if self.is_eof(pos){
-            return &TokenType::EOF;
+            return &self.tokens[self.tokens.len() - 1];
         } 
-        self.pos += 1;
-        &self.tokens[pos].class
+        &self.tokens[pos]
     }
 
     fn is_eof(&self, pos: usize) -> bool{
-        if pos>= self.tokens.len(){
-            true
-        } else {
-            false
-        }
+        pos>= self.tokens.len()
     }
 }
 
@@ -54,23 +92,15 @@ mod tests{
     pub fn parse_binary_ops(){
         let src = vec!("4+5", "7-2", "8*2", "5/5");
         let expected = vec!(
-            Expr{
-                expr: ExprType::new_add(ExprType::new_num_literal(4), ExprType::new_num_literal(5))
-            },
-            Expr{
-                expr: ExprType::new_sub(ExprType::new_num_literal(7), ExprType::new_num_literal(2))
-            },
-            Expr{
-                expr: ExprType::new_mul(ExprType::new_num_literal(8), ExprType::new_num_literal(2))
-            },
-            Expr{
-                expr: ExprType::new_div(ExprType::new_num_literal(5), ExprType::new_num_literal(5))
-            },
+            Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(5)),
+            Expr::new_sub(Expr::new_num_literal(7), Expr::new_num_literal(2)), 
+            Expr::new_mul(Expr::new_num_literal(8), Expr::new_num_literal(2)),
+            Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(5)),
         );
         for (line, expect) in src.iter().zip(expected){
             let mut lexer = Lexer::new(line);
             let parse_result = Parser::new(lexer.lex()).parse();
-            assert_eq!(parse_result, expect, "Expected expression: {:?}, Got: {:?}", expect, parse_result);
+            assert_eq!(parse_result.clone().unwrap(), expect, "Expected expression: {:?}, Got: {:?}", expect, parse_result);
         }
     }
 }
