@@ -3,11 +3,11 @@ use super::token::*;
 //using PartialOrd so we can compare the enum to get its precedence
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub enum Expr{
-    Mul(Box<Expr>, Box<Expr>),
+    Literal(Literal),
     Div(Box<Expr>, Box<Expr>),
+    Mul(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
-    Literal(Literal)
 }
 
 impl Expr{
@@ -25,6 +25,9 @@ impl Expr{
     }
     pub fn new_div(left: Expr, right: Expr) -> Expr{
         Expr::Div(Box::new(left), Box::new(right))
+    }
+    pub fn new_literal(literal: &Literal) -> Expr{
+        Expr::Literal(literal.to_owned())
     }
     pub fn new_num_literal(num: i32) -> Expr{
         Expr::Literal(Literal::Number(num))
@@ -46,31 +49,33 @@ impl Expr{
         }
     }
 
-    //Merges two expressions together on the order of their precedence
+    //Merges two expressions together based on the order of their precedence
     //For example: Merge(Add(8, 4), Mul(4, 6)) becomes:
     // Add(8, Mul(4, 6))
     pub fn merge(self, other: Expr) -> Expr{
-        if self < other{
+        //return other if self is a literal
+        if let Expr::Literal(_) = self{
+            return other;
+        } else if self < other { //Compare the enums based on their order using PartialOrd
             return other.inverse().merge(self).inverse();
         }
         //Bring the enums into scope for ease in reading
         use Expr::*;
-        //Compare the enums based on their order using PartialOrd
-        match self.clone(){
-            Mul(left, _ ) => {
-                Mul(left, Box::new(other))
+        match self{
+            Div(left, right ) => {
+                Div(left, Box::new(right.merge(other)))
+            } 
+            Mul(left, right ) => {
+                Mul(left, Box::new(right.merge(other)))
             }
-            Div(left, _ ) => {
-                Div(left, Box::new(other))
+            Add(left, right ) => {
+                Add(left, Box::new(right.merge(other)))
             } 
-            Add(left, _ ) => {
-                Add(left, Box::new(other))
-            } 
-            Sub(left, _ ) => {
-                Sub(left, Box::new(other))
+            Sub(left, right ) => {
+                Sub(left, Box::new(right.merge(other)))
             } 
             _ => {
-                self
+                other
             }
         }
     }
@@ -104,6 +109,8 @@ pub enum ParseError{
 
 #[cfg(test)]
 mod tests{
+    use std::vec;
+
     use super::*;
 
     #[test]
@@ -160,6 +167,7 @@ mod tests{
 
         assert_eq!(
             left.merge(right.clone()), 
+            // 5+(3*8)
             Expr::Add(
                 Box::new(Expr::new_num_literal(5)),
                 Box::new(right)
@@ -177,12 +185,50 @@ mod tests{
         );
         
         assert_eq!(
-            left.clone().merge(right), 
+            left.clone().merge(right),
+            //(5*3)+8
             Expr::Add(
                 Box::new(left),
                 Box::new(Expr::new_num_literal(8))
             )
-        )
+        );
+
+        //5*5/6*6-2
+        let exprs = vec![
+            Expr::new_mul(
+                Expr::new_num_literal(5),
+                Expr::new_num_literal(5)
+            ),
+            Expr::new_div(
+                Expr::new_num_literal(5),
+                Expr::new_num_literal(6)
+            ),
+            Expr::new_mul(
+                Expr::new_num_literal(6),
+                Expr::new_num_literal(6)
+            ),
+            Expr::new_sub(
+                Expr::new_num_literal(6),
+                Expr::new_num_literal(2)
+            )
+        ];
+
+        assert_eq!(
+            exprs[0].clone().merge(exprs[1].clone()).merge(exprs[2].clone()).merge(exprs[3].clone()),
+            Expr::new_sub(
+                Expr::new_mul(
+                    Expr::new_mul(
+                        Expr::new_num_literal(5),
+                        Expr::new_div(
+                            Expr::new_num_literal(5),
+                            Expr::new_num_literal(6)
+                        )
+                    ),
+                    Expr::new_num_literal(6)
+                ),
+                Expr::new_num_literal(2)
+            )
+        );
     }
 
     #[test]

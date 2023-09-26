@@ -32,6 +32,20 @@ impl TokenType{
             _ => TokenType::Error(TokenErrorType::InvalidTokenError),
         }
     }
+
+    pub fn get_literal(&self) -> Option<&Literal>{
+        match self{
+            Self::Literal(lit) => Some(lit),
+            _ => None,
+        }
+    }
+
+    pub fn get_operator(&self) -> Option<&Operator>{
+        match self{
+            Self::Operator(opr) => Some(opr),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

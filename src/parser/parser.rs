@@ -1,15 +1,14 @@
 use super::token::*;
 use super::expr::*;
 
-pub struct Parser{
-    tokens: Vec<Token>,
+pub struct Parser<'a>{
+    tokens: &'a Vec<Token>,
     pos: u32,
 }
 
-#[allow(unused)]
-impl Parser{
-    pub fn new(tokens: Vec<Token>) -> Parser{
-        Self { tokens, pos: 0 }
+impl<'a> Parser<'a>{
+    pub fn new(tokens: &'a Vec<Token>) -> Parser<'a>{
+        Self { tokens, pos: 0}
     }
 
     //parse the tokens into an expression
@@ -17,36 +16,42 @@ impl Parser{
         self.expr()
     }
 
+    //recursive function to create the ast
     fn expr(&mut self) -> Option<Expr>{
-        let expr: Expr;
-        match &self.get_current_token().class{
-            TokenType::Literal(left) => {
-                //match the next token
-                match &self.get_current_token().class{
-                    TokenType::Operator(opr) => {
-                        let right = match &self.peek().class{
-                            TokenType::Literal(right) => {
-                                right
-                            },
-                            _ => {
-                                return None;
-                            }
-                        };
-                        expr = Expr::new_binary_op(left, right, opr);
-                        if let Some(next_expr) = self.expr(){
-                            return Some(expr.merge(next_expr));
+        match self.get_current_token().class{
+            TokenType::Literal(_) => {
+                Some(
+                    {
+                        let expr = self.literal_start();
+                        self.consume();
+                        if let Some(next) = self.expr(){
+                            println!("{:?} {:?}", expr, next);
+                            println!("{:?}", expr.clone().merge(next.clone()));
+                            expr.merge(next)
                         } else {
-                            return Some(expr);
+                            expr
                         }
-                    },
-                    _ => {
-                        None
                     }
-                }
+                )
             }
-            _ => {
-                None
-            }
+            _ => None,
+        }
+    }
+
+    //Handles when the expression starts with a literal
+    //Return a binary expression if the next token is an operator else literal expression
+    fn literal_start(&mut self) -> Expr{
+        self.consume();
+        let left = self.get_previous_token();
+        if let TokenType::Operator(opr) = &self.get_current_token().class{
+            let right = self.peek();
+            Expr::new_binary_op(
+                &left.class.get_literal().unwrap(), 
+                &right.class.get_literal().unwrap(), 
+                &opr
+            )
+        } else {
+            Expr::new_literal(left.class.get_literal().unwrap())
         }
     }
 
@@ -59,11 +64,9 @@ impl Parser{
         }
     }
 
-    //advances the position and returns the consumed token
-    fn consume(&mut self) -> &Token{
-        let consumed = &self.tokens[self.pos as usize];
+    //advances the position
+    fn consume(&mut self){
         self.pos += 1;
-        consumed
     }
 
 
@@ -77,8 +80,19 @@ impl Parser{
         &self.tokens[pos]
     }
 
+    fn get_previous_token(&self) -> &Token{
+        if self.pos == 0{
+            return self.get_current_token()
+        }
+        let pos = self.pos as usize - 1;
+        if self.is_eof(pos){
+            return &self.tokens[self.tokens.len() - 1];
+        }
+        &self.tokens[pos]
+    }
+
     fn is_eof(&self, pos: usize) -> bool{
-        pos>= self.tokens.len()
+        pos >= self.tokens.len()
     }
 }
 
@@ -99,8 +113,8 @@ mod tests{
         );
         for (line, expect) in src.iter().zip(expected){
             let mut lexer = Lexer::new(line);
-            let parse_result = Parser::new(lexer.lex()).parse();
-            assert_eq!(parse_result.clone().unwrap(), expect, "Expected expression: {:?}, Got: {:?}", expect, parse_result);
+            let parse_result = Parser::new(&lexer.lex()).parse();
+            assert_eq!(parse_result.unwrap(), expect);
         }
     }
 }

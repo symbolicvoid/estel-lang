@@ -1,3 +1,4 @@
+use crate::parser::parser::Parser;
 use crate::token::{Token, TokenType};
 use crate::lexer::Lexer;
 
@@ -17,11 +18,19 @@ impl Interpreter{
     pub fn interpret(&mut self){
         let mut lexer = Lexer::new(&self.source);
         self.tokens = lexer.lex();
-        self.check_lex_errors();
-        println!("Out:");
+        if self.check_lex_errors(){
+            //Stop interpreting if a lexical error occured
+            return;
+        }
+        println!("Tokens:");
         for token in self.tokens.iter(){
             println!("{:?}", token);
         }
+
+        //Parser
+        let mut parser = Parser::new(&self.tokens);
+        let ast = parser.parse();
+        println!("AST: {:?}", ast);
     }
 
 
