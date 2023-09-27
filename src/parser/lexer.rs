@@ -48,6 +48,14 @@ impl Lexer{
                     self.advance();
                     Some(TokenType::new_operator(ch))
                 }
+                '(' => {
+                    self.advance();
+                    Some(TokenType::Lparen)
+                }
+                ')' => {
+                    self.advance();
+                    Some(TokenType::Rparen)
+                }
                 '\r' => {
                     self.advance();
                     None

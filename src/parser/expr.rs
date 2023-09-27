@@ -3,7 +3,11 @@ use super::token::*;
 //using PartialOrd so we can compare the enum to get its precedence
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
 pub enum Expr{
+    //Meant to represent lack of expression
+    None,
     Literal(Literal),
+    //(expr)
+    Paren(Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
@@ -26,6 +30,9 @@ impl Expr{
     pub fn new_div(left: Expr, right: Expr) -> Expr{
         Expr::Div(Box::new(left), Box::new(right))
     }
+    pub fn new_paren(expr: Expr) -> Expr{
+        Expr::Paren(Box::new(expr))
+    }
     pub fn new_literal(literal: &Literal) -> Expr{
         Expr::Literal(literal.to_owned())
     }
@@ -33,25 +40,29 @@ impl Expr{
     pub fn new_num_literal(num: i32) -> Expr{
         Expr::Literal(Literal::Number(num))
     }
-    pub fn new_binary_op(left: &Literal, right: &Literal, opr: &Operator) -> Expr{
+    pub fn new_binary_op(left: Expr, right: Expr, opr: &Operator) -> Expr{
         match opr{
             Operator::Add => {
-                Expr::new_add(Expr::Literal(left.clone()), Expr::Literal(right.clone()))
+                Expr::new_add(left, right)
             }
             Operator::Sub => {
-                Expr::new_sub(Expr::Literal(left.clone()), Expr::Literal(right.clone()))
+                Expr::new_sub(left, right)
             }
             Operator::Mul => {
-                Expr::new_mul(Expr::Literal(left.clone()), Expr::Literal(right.clone()))
+                Expr::new_mul(left, right)
             }
             Operator::Div => {
-                Expr::new_div(Expr::Literal(left.clone()), Expr::Literal(right.clone()))
+                Expr::new_div(left, right)
             }
         }
     }
 
     pub fn solve(&self) -> Option<Literal>{
         match self{
+            Expr::None => panic!("None expression inside the AST!"),
+            Expr::Paren(expr) => {
+                expr.solve()
+            }
             //Division operation can only be done between two numbers
             Expr::Div(left, right) => {
                 let left = match left.solve(){
@@ -90,6 +101,7 @@ impl Expr{
                             }
                             Some(Literal::String(result))
                         }
+                        _ => None
                     }
                 }
             }
@@ -121,6 +133,7 @@ impl Expr{
                             }
                             Some(Literal::String(result))
                         }
+                        _ => None
                     }
                 }
             }
@@ -188,7 +201,8 @@ impl Expr{
                 } 
                 Sub(left, right ) => {
                     Sub(left, Box::new(right.merge(other)))
-                } 
+                }
+                Paren(_) => self,
                 _ => {
                     other
                 }
@@ -323,5 +337,99 @@ mod tests{
                 Expr::new_num_literal(2)
             )
         );
+
+        //5*5+2-8
+        let exprs = vec![
+            Expr::new_mul(
+                Expr::new_num_literal(5),
+                Expr::new_num_literal(5)
+            ),
+            Expr::new_add(
+                Expr::new_num_literal(5),
+                Expr::new_num_literal(2)
+            ),
+            Expr::new_sub(
+                Expr::new_num_literal(2),
+                Expr::new_num_literal(8)
+            )
+        ];
+        assert_eq!(
+            exprs[0].clone().merge(exprs[1].clone()).merge(exprs[2].clone()),
+            Expr::new_sub(
+                Expr::new_add(
+                    Expr::new_mul(
+                        Expr::new_num_literal(5),
+                        Expr::new_num_literal(5)
+                    ),
+                    Expr::new_num_literal(2)
+                ),
+                Expr::new_num_literal(8)
+            )
+        );
+    }
+
+    #[test]
+    fn solve_numeric_exprs(){
+        let exprs = vec!(
+            //5*5+3
+            Expr::new_add(
+                Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)), 
+                Expr::new_num_literal(3)
+            ),
+            //(4)*(5)
+            Expr::new_mul(
+                Expr::new_paren(Expr::new_num_literal(4)), 
+                Expr::new_paren(Expr::new_num_literal(5))
+            ),
+            //5*(5+3)
+            Expr::new_mul(
+                Expr::new_num_literal(5), 
+                Expr::new_paren(
+                    Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(3))
+                )
+            ),
+            //5*(5+3)*2
+            Expr::new_mul(
+                Expr::new_mul(
+                    Expr::new_num_literal(5), 
+                    Expr::new_paren(
+                        Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(3))
+                    )
+                ),
+                Expr::new_num_literal(2)
+            ),
+            //(4-2)*7/(4+3)
+            Expr::new_mul(
+                Expr::new_paren(
+                    Expr::new_sub(Expr::new_num_literal(4), Expr::new_num_literal(2))
+                ),
+                Expr::new_div(
+                    Expr::new_num_literal(7), 
+                    Expr::new_paren(
+                        Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(3))
+                    )
+                )
+            ),
+            //(5-5)*(2+8)
+            Expr::new_mul(
+                Expr::new_paren(
+                    Expr::new_sub(Expr::new_num_literal(5), Expr::new_num_literal(5))
+                ),
+                Expr::new_paren(
+                    Expr::new_add(Expr::new_num_literal(2), Expr::new_num_literal(8))
+                )
+            ),
+        );
+        let solns = vec!(
+            Some(Literal::Number(28)),
+            Some(Literal::Number(20)),
+            Some(Literal::Number(40)),
+            Some(Literal::Number(80)),
+            Some(Literal::Number(2)),
+            Some(Literal::Number(0)),
+        );
+        for (expr, soln) in exprs.iter().zip(solns.iter()){
+            assert_eq!(expr.solve(), *soln);
+        }
     }
 }

@@ -10,6 +10,8 @@ pub enum TokenType{
     Literal(Literal),
     Operator(Operator),
     Error(TokenErrorType),
+    Lparen,
+    Rparen,
     Eof,
 }
 
