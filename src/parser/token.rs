@@ -69,6 +69,22 @@ pub enum Literal{
     String(String),
 }
 
+impl Literal{
+    pub fn get_number(&self) -> Option<i32>{
+        match self{
+            Self::Number(num) => Some(*num),
+            _ => None,
+        }
+    }
+
+    pub fn get_string(&self) -> Option<&String>{
+        match self{
+            Self::String(string) => Some(string),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator{
     Add,

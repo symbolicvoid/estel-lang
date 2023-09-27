@@ -31,6 +31,10 @@ impl Interpreter{
         let mut parser = Parser::new(&self.tokens);
         let ast = parser.parse();
         println!("AST: {:?}", ast);
+
+        if let Some(expr) = ast{
+            println!("Result: {:?}", expr.solve());
+        }
     }
 
 

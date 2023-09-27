@@ -29,6 +29,7 @@ impl Expr{
     pub fn new_literal(literal: &Literal) -> Expr{
         Expr::Literal(literal.to_owned())
     }
+    #[allow(dead_code)]
     pub fn new_num_literal(num: i32) -> Expr{
         Expr::Literal(Literal::Number(num))
     }
@@ -49,55 +50,148 @@ impl Expr{
         }
     }
 
-    //Merges two expressions together based on the order of their precedence
-    //For example: Merge(Add(8, 4), Mul(4, 6)) becomes:
-    // Add(8, Mul(4, 6))
-    pub fn merge(self, other: Expr) -> Expr{
-        //return other if self is a literal
-        if let Expr::Literal(_) = self{
-            return other;
-        } else if self < other { //Compare the enums based on their order using PartialOrd
-            return other.inverse().merge(self).inverse();
-        }
-        //Bring the enums into scope for ease in reading
-        use Expr::*;
+    pub fn solve(&self) -> Option<Literal>{
         match self{
-            Div(left, right ) => {
-                Div(left, Box::new(right.merge(other)))
-            } 
-            Mul(left, right ) => {
-                Mul(left, Box::new(right.merge(other)))
+            //Division operation can only be done between two numbers
+            Expr::Div(left, right) => {
+                let left = match left.solve(){
+                    Some(literal) => literal.get_number(),
+                    None => return None,
+                };
+                let right = match right.solve(){
+                    Some(literal) => literal.get_number(),
+                    None => return None,
+                };
+                if left == None || right == None{
+                    None
+                } else {
+                    Some(Literal::Number(left.unwrap() / right.unwrap()))
+                }
             }
-            Add(left, right ) => {
-                Add(left, Box::new(right.merge(other)))
-            } 
-            Sub(left, right ) => {
-                Sub(left, Box::new(right.merge(other)))
-            } 
-            _ => {
-                other
+            //Multiplication can be done between two numbers, and a string and a number
+            //"Hello" * 2  => "HelloHello" 
+            Expr::Mul(left, right) => {
+                let left = left.solve();
+                let right = match right.solve(){
+                    Some(literal) => literal.get_number(),
+                    None => return None,
+                };
+                if left == None || right == None{
+                    None
+                } else {
+                    match left.unwrap(){
+                        Literal::Number(num) => {
+                            Some(Literal::Number(num * right.unwrap()))
+                        }
+                        Literal::String(string) => {
+                            let mut result = String::new();
+                            for _ in 0..right.unwrap(){
+                                result.push_str(&string);
+                            }
+                            Some(Literal::String(result))
+                        }
+                    }
+                }
+            }
+            //Can add both Strings and Numbers
+            Expr::Add(left, right) => {
+                let left = left.solve();
+                let right = right.solve();
+                if left == None || right == None{
+                    None
+                } else {
+                    match (left.unwrap(), right.unwrap()){
+                        (Literal::Number(left), Literal::Number(right)) => {
+                            Some(Literal::Number(left + right))
+                        }
+                        (Literal::String(left), Literal::String(right)) => {
+                            Some(Literal::String(left + &right))
+                        }
+                        (Literal::String(left), Literal::Number(right)) => {
+                            let mut result = String::new();
+                            for _ in 0..right{
+                                result.push_str(&left);
+                            }
+                            Some(Literal::String(result))
+                        }
+                        (Literal::Number(left), Literal::String(right)) => {
+                            let mut result = String::new();
+                            for _ in 0..left{
+                                result.push_str(&right);
+                            }
+                            Some(Literal::String(result))
+                        }
+                    }
+                }
+            }
+            //Can only subtract numbers
+            Expr::Sub(left, right) => {
+                let left = match left.solve(){
+                    Some(literal) => literal.get_number(),
+                    None => return None,
+                };
+                let right = match right.solve(){
+                    Some(literal) => literal.get_number(),
+                    None => return None,
+                };
+                if left == None || right == None{
+                    None
+                } else {
+                    Some(Literal::Number(left.unwrap() - right.unwrap()))
+                }
+            }
+            Expr::Literal(literal) => {
+                Some(literal.clone())
             }
         }
     }
 
-    //Swap the left and right expressions of an expression
-    fn inverse(self) -> Expr{
+    //Merges two expressions together based on the order of their precedence
+    //For example: Merge(Add(8, 4), Mul(4, 6)) becomes:
+    // Add(8, Mul(4, 6))
+    pub fn merge(self, other: Expr) -> Expr{
+        //Bring the enums into scope for ease in reading
         use Expr::*;
-        match self{
-            Mul(left, right) => {
-                Mul(right, left)
-            } 
-            Div(left, right) => {
-                Div(right, left)
-            } 
-            Sub(left, right) => {
-                Sub(right, left)
-            } 
-            Add(left, right) => {
-                Add(right, left)
+        //return other if self is a literal
+        if let Literal(_) = self{
+            return other;
+        } else if self < other { //Compare the enums based on their order using PartialOrd
+            //If the other expr has a higher precedence, we want to put self at the left of the expr
+            match other{
+                Div(left, right ) => {
+                    Div(Box::new(self.merge(*left)), right)
+                } 
+                Mul(left, right ) => {
+                    Mul(Box::new(self.merge(*left)), right)
+                }
+                Add(left, right ) => {
+                    Add(Box::new(self.merge(*left)), right)
+                }
+                Sub(left, right ) => {
+                    Sub(Box::new(self.merge(*left)), right)
+                }
+                _ => {
+                    other
+                }
             }
-            _ => {
-                self
+        } else {
+            //Place the other expr to the right of the expr
+            match self{
+                Div(left, right ) => {
+                    Div(left, Box::new(right.merge(other)))
+                } 
+                Mul(left, right ) => {
+                    Mul(left, Box::new(right.merge(other)))
+                }
+                Add(left, right ) => {
+                    Add(left, Box::new(right.merge(other)))
+                } 
+                Sub(left, right ) => {
+                    Sub(left, Box::new(right.merge(other)))
+                } 
+                _ => {
+                    other
+                }
             }
         }
     }
@@ -229,21 +323,5 @@ mod tests{
                 Expr::new_num_literal(2)
             )
         );
-    }
-
-    #[test]
-    fn inverse_exprs(){
-        let expr = Expr::new_mul(
-            Expr::new_num_literal(3), 
-            Expr::new_mul(Expr::new_num_literal(4), Expr::new_num_literal(8))
-        );
-
-        assert_eq!(
-            expr.inverse(),
-            Expr::new_mul(
-                Expr::new_mul(Expr::new_num_literal(4), Expr::new_num_literal(8)),
-                Expr::new_num_literal(3), 
-            )
-        )
     }
 }

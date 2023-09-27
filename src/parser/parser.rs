@@ -25,7 +25,7 @@ impl<'a> Parser<'a>{
                         let expr = self.literal_start();
                         self.consume();
                         if let Some(next) = self.expr(){
-                            println!("{:?} {:?}", expr, next);
+                            println!("{:?}\t{:?}", expr, next);
                             println!("{:?}", expr.clone().merge(next.clone()));
                             expr.merge(next)
                         } else {
