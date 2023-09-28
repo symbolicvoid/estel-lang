@@ -96,6 +96,66 @@ impl Literal{
             Self::String(string) => string.to_owned(),
         }
     }
+
+    pub fn add(self, other: Literal) -> Result<Literal, LiteralOpError>{
+        match (self, other){
+            (Self::Number(num1), Self::Number(num2)) => 
+                Ok(Self::Number(num1 + num2)),
+            (Self::String(string1), Self::String(string2)) => 
+                Ok(Self::String(string1 + &string2)),
+            (Self::String(string), Self::Number(num)) => 
+                Ok(Self::String(string + &num.to_string())),
+            (Self::Number(num), Self::String(string)) => 
+                Ok(Self::String(num.to_string() + &string)),
+            _ => return Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
+    pub fn sub(self, other: Literal) -> Result<Literal, LiteralOpError>{
+        match (self, other){
+            (Self::Number(num1), Self::Number(num2)) => Ok(Self::Number(num1 - num2)),
+            _ => return Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
+    pub fn mul(self, other: Literal) -> Result<Literal, LiteralOpError>{
+        match (self, other){
+            (Self::Number(num1), Self::Number(num2)) => Ok(Self::Number(num1 * num2)),
+            (Self::String(string), Self::Number(num)) => {
+                let mut result = String::new();
+                for _ in 0..num{
+                    result += &string;
+                }
+                Ok(Self::String(result))
+            }
+            (Self::Number(num), Self::String(string)) => {
+                let mut result = String::new();
+                for _ in 0..num{
+                    result += &string;
+                }
+                Ok(Self::String(result))
+            }
+            _ => return Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
+    pub fn div(self, other: Literal) -> Result<Literal, LiteralOpError>{
+        match (self, other){
+            (Self::Number(num1), Self::Number(num2)) => {
+                if num2 == 0{
+                    return Err(LiteralOpError::DivByZeroError);
+                }
+                Ok(Self::Number(num1 / num2))
+            }
+            _ => return Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum LiteralOpError{
+    InvalidTypeError,
+    DivByZeroError,
 }
 
 #[derive(Debug, PartialEq, Clone)]

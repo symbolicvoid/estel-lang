@@ -57,7 +57,7 @@ impl Expr{
         }
     }
 
-    pub fn solve(&self) -> Option<Literal>{
+    pub fn solve(&self) -> Result<Literal, LiteralOpError>{
         match self{
             Expr::None => panic!("None expression inside the AST!"),
             Expr::Paren(expr) => {
@@ -65,94 +65,31 @@ impl Expr{
             }
             //Division operation can only be done between two numbers
             Expr::Div(left, right) => {
-                let left = match left.solve(){
-                    Some(literal) => literal.get_number(),
-                    None => return None,
-                };
-                let right = match right.solve(){
-                    Some(literal) => literal.get_number(),
-                    None => return None,
-                };
-                if left == None || right == None{
-                    None
-                } else {
-                    Some(Literal::Number(left.unwrap() / right.unwrap()))
-                }
+                let left = left.solve()?;
+                let right = right.solve()?;
+                left.div(right)
             }
             //Multiplication can be done between two numbers, and a string and a number
             //"Hello" * 2  => "HelloHello" 
             Expr::Mul(left, right) => {
-                let left = left.solve();
-                let right = match right.solve(){
-                    Some(literal) => literal.get_number(),
-                    None => return None,
-                };
-                if left == None || right == None{
-                    None
-                } else {
-                    match left.unwrap(){
-                        Literal::Number(num) => {
-                            Some(Literal::Number(num * right.unwrap()))
-                        }
-                        Literal::String(string) => {
-                            let mut result = String::new();
-                            for _ in 0..right.unwrap(){
-                                result.push_str(&string);
-                            }
-                            Some(Literal::String(result))
-                        }
-                    }
-                }
+                let left = left.solve()?;
+                let right = right.solve()?;
+                left.mul(right)
             }
             //Can add both Strings and Numbers
             Expr::Add(left, right) => {
-                let left = left.solve();
-                let right = right.solve();
-                if left == None || right == None{
-                    None
-                } else {
-                    match (left.unwrap(), right.unwrap()){
-                        (Literal::Number(left), Literal::Number(right)) => {
-                            Some(Literal::Number(left + right))
-                        }
-                        (Literal::String(left), Literal::String(right)) => {
-                            Some(Literal::String(left + &right))
-                        }
-                        (Literal::String(left), Literal::Number(right)) => {
-                            let mut result = String::new();
-                            for _ in 0..right{
-                                result.push_str(&left);
-                            }
-                            Some(Literal::String(result))
-                        }
-                        (Literal::Number(left), Literal::String(right)) => {
-                            let mut result = String::new();
-                            for _ in 0..left{
-                                result.push_str(&right);
-                            }
-                            Some(Literal::String(result))
-                        }
-                    }
-                }
+                let left = left.solve()?;
+                let right = right.solve()?;
+                left.add(right)
             }
             //Can only subtract numbers
             Expr::Sub(left, right) => {
-                let left = match left.solve(){
-                    Some(literal) => literal.get_number(),
-                    None => return None,
-                };
-                let right = match right.solve(){
-                    Some(literal) => literal.get_number(),
-                    None => return None,
-                };
-                if left == None || right == None{
-                    None
-                } else {
-                    Some(Literal::Number(left.unwrap() - right.unwrap()))
-                }
+                let left = left.solve()?;
+                let right = right.solve()?;
+                left.sub(right)
             }
             Expr::Literal(literal) => {
-                Some(literal.clone())
+                Ok(literal.to_owned())
             }
         }
     }
@@ -419,15 +356,15 @@ mod tests{
             ),
         );
         let solns = vec!(
-            Some(Literal::Number(28)),
-            Some(Literal::Number(20)),
-            Some(Literal::Number(40)),
-            Some(Literal::Number(80)),
-            Some(Literal::Number(2)),
-            Some(Literal::Number(0)),
+            Literal::Number(28),
+            Literal::Number(20),
+            Literal::Number(40),
+            Literal::Number(80),
+            Literal::Number(2),
+            Literal::Number(0),
         );
         for (expr, soln) in exprs.iter().zip(solns.iter()){
-            assert_eq!(expr.solve(), *soln);
+            assert_eq!(expr.solve().unwrap(), *soln);
         }
     }
 }

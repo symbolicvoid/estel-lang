@@ -11,12 +11,17 @@ impl Stmt{
     pub fn execute(&self){
         match self{
             Stmt::Print(expr) => {
-                if let Some(literal) = expr.solve(){
-                    println!("{}", literal.to_string());
+                let res = expr.solve();
+                match res{
+                    Ok(literal) => println!("{}", literal.to_string()),
+                    Err(err) => {
+                        eprintln!("{:?}", err);
+                        return;
+                    }
                 }
             }
             Stmt::Expr(expr) => {
-                expr.solve();
+                let _ = expr.solve();
             }
             _ => {}
         }
