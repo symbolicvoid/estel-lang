@@ -1,4 +1,4 @@
-25 + 25
-58 + 2 + 2
-78 + - "b"
-"crow"
+print 25 + 25
+print 58 + 2 *3
+print 78 + "b"
+print "crow"

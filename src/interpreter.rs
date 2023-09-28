@@ -29,11 +29,10 @@ impl Interpreter{
 
         //Parser
         let mut parser = Parser::new(&self.tokens);
-        let ast = parser.parse();
-        println!("AST: {:?}", ast);
-
-        if let Some(expr) = ast{
-            println!("Result: {:?}", expr.solve());
+        let block = parser.parse();
+        println!("Block: {:?}", block);
+        if let Some(stmt) = block{
+            stmt.execute();
         }
     }
 

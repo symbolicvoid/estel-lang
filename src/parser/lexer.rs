@@ -30,7 +30,7 @@ impl Lexer{
     }
 
     pub fn lex(&mut self) -> Vec<Token>{
-        let mut tokens = Vec::new();
+        let mut tokens: Vec<Token> = Vec::new();
 
         //continue as long as we get some character, advance() sets current character to None at the end of string
         while let Some(ch) = self.current_char{
@@ -42,6 +42,7 @@ impl Lexer{
                 //not call advance() when another function is called to lex the characters
                 //as they call advance() on their own
                 '0'..='9' => Some(self.lex_number()),
+                'a'..='z' | 'A'..='Z' => Some(self.lex_keyword()),
                 '"' | '\'' => Some(self.lex_string()),
                 '+' | '-' | '/' | '*' => {
                     let ch = ch;
@@ -59,16 +60,32 @@ impl Lexer{
                 '\r' => {
                     self.advance();
                     None
-                },
+                }
+                //Semicolon or blank line ends statement
+                ';' => {
+                    self.advance();
+                    Some(TokenType::StmtEnd)
+                }
                 //handle newline character by incrementing the line and advancing the lexer
                 '\n' => {
                     self.line += 1;
                     //reset the start of the token relative to the line
                     self.token_start = 0;
+                    //if the last token added was an StmtEnd, then don't add another
+                    //else add an StmtEnd token
+                    let token_type = if let Some(token) = tokens.last(){
+                        if token.class == TokenType::StmtEnd{
+                            None
+                        } else {
+                            Some(TokenType::StmtEnd)
+                        }
+                    } else {
+                        Some(TokenType::StmtEnd)
+                    };
                     self.advance();
-                    None
+                    token_type
                 }
-                //do nothing for newlines
+                //do nothing for whitespaces
                 ' ' => {
                     self.advance();
                     None
@@ -134,6 +151,27 @@ impl Lexer{
         TokenType::Error(TokenErrorType::UnterminatedStringError)
     }
 
+    //Generate keyword or (todo) identifier token
+    fn lex_keyword(&mut self) -> TokenType{
+        let mut word = String::new();
+        while let Some(ch) = self.current_char{
+            match ch{
+                'a'..='z' | 'A'..='Z' =>{ 
+                    self.advance();
+                    word.push(ch);
+                },
+                ' ' | '\n' | ';' => break,
+                _ => return TokenType::Error(TokenErrorType::InvalidTokenError),
+            };
+        };
+
+        if let Some(keyword) = Keyword::new_keyword(&word){
+            TokenType::Keyword(keyword)
+        } else {
+            TokenType::Error(TokenErrorType::InvalidTokenError)
+        }
+    }
+
     //function to advance the pos attribute and update the current character
     fn advance(&mut self) {
         self.pos += 1;
@@ -196,6 +234,33 @@ mod tests{
         assert_eq!(TokenType::Error(TokenErrorType::UnterminatedStringError), lexer.lex_string());
         lexer = Lexer::new("\'Hello\"");
         assert_eq!(TokenType::Error(TokenErrorType::UnterminatedStringError), lexer.lex_string());
+    }
+
+    #[test]
+    fn keyword_lex(){
+        //lex valid keywords
+        let mut lexer = Lexer::new("print");
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        lexer = Lexer::new("print 25");
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        lexer = Lexer::new("print\n");
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        lexer = Lexer::new("print;");
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        lexer = Lexer::new("print 25;");
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+
+        //lex invalid keywords
+        lexer = Lexer::new("prin");
+        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
+        lexer = Lexer::new("prin 25");
+        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
+        lexer = Lexer::new("prin\n");
+        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
+        lexer = Lexer::new("prin;");
+        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
+        lexer = Lexer::new("prin 25;");
+        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
     }
 
     //compare the expected and resulted vectors one element at a time
@@ -271,7 +336,12 @@ mod tests{
                 class: TokenType::new_number_literal("25"),
                 start: 7,
                 line: 1,
-            }, 
+            },
+            Token{
+                class: TokenType::StmtEnd,
+                start: 10,
+                line: 2,
+            },
             Token{
                 class: TokenType::Eof,
                 start: 11,

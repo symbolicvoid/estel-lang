@@ -1,5 +1,6 @@
 use super::token::*;
 use super::expr::*;
+use super::stmt::*;
 
 pub struct Parser<'a>{
     tokens: &'a Vec<Token>,
@@ -12,8 +13,39 @@ impl<'a> Parser<'a>{
     }
 
     //parse the tokens into an expression
-    pub fn parse(&mut self) -> Option<Expr>{
-        self.expr()
+    pub fn parse(&mut self) -> Option<Block>{
+        let mut stmts = Vec::new();
+        while !self.is_eof(self.pos as usize){
+            let stmt = self.make_statement();
+            //consume the StmtEnd token
+            self.consume();
+            match stmt{
+                None => {},
+                Some(stmt) => stmts.push(stmt),
+            }
+        }
+        Some(Block{stmts})
+    }
+
+    pub fn make_statement(&mut self) -> Option<Stmt>{
+        match self.get_current_token().class{
+            TokenType::Keyword(Keyword::Print) => {
+                self.consume();
+                let expr = self.expr();
+                match expr{
+                    None => None,
+                    Some(expr) => Some(Stmt::Print(expr)),
+                }
+            }
+            TokenType::Literal(_) | TokenType::Lparen => {
+                let expr = self.expr();
+                match expr{
+                    None => None,
+                    Some(expr) => Some(Stmt::Expr(expr)),
+                }
+            }
+            _ => None,
+        }
     }
 
     //recursive function to create the ast
@@ -168,7 +200,10 @@ mod tests{
         for (line, expect) in src.iter().zip(expected){
             let mut lexer = Lexer::new(line);
             let parse_result = Parser::new(&lexer.lex()).parse();
-            assert_eq!(parse_result.unwrap(), expect);
+            match &parse_result.unwrap().stmts[0]{
+                Stmt::Expr(expr) => assert_eq!(expr.to_owned(), expect),
+                _ => panic!("Stmt is not an expr statement"),
+            }
         }
     }
 
@@ -229,7 +264,10 @@ mod tests{
         for (line, expect) in src.iter().zip(expected){
             let mut lexer = Lexer::new(line);
             let parse_result = Parser::new(&lexer.lex()).parse();
-            assert_eq!(parse_result.unwrap(), expect);
+            match &parse_result.unwrap().stmts[0]{
+                Stmt::Expr(expr) => assert_eq!(expr.to_owned(), expect),
+                _ => panic!("Stmt is not an expr statement"),
+            }
         }
     }
 }

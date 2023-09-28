@@ -10,8 +10,12 @@ pub enum TokenType{
     Literal(Literal),
     Operator(Operator),
     Error(TokenErrorType),
+    //Keywords
+    Keyword(Keyword),
     Lparen,
     Rparen,
+    //Semicolon or blank line used to terminate statements
+    StmtEnd,
     Eof,
 }
 
@@ -85,6 +89,13 @@ impl Literal{
             _ => None,
         }
     }
+
+    pub fn to_string(&self) -> String{
+        match self{
+            Self::Number(num) => num.to_string(),
+            Self::String(string) => string.to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -93,6 +104,20 @@ pub enum Operator{
     Sub,
     Mul,
     Div
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Keyword{
+    Print,
+}
+
+impl Keyword{
+    pub fn new_keyword(text: &str) -> Option<Self>{
+        match text{
+            "print" => Some(Self::Print),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

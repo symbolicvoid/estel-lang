@@ -101,7 +101,6 @@ impl Expr{
                             }
                             Some(Literal::String(result))
                         }
-                        _ => None
                     }
                 }
             }
@@ -133,7 +132,6 @@ impl Expr{
                             }
                             Some(Literal::String(result))
                         }
-                        _ => None
                     }
                 }
             }
