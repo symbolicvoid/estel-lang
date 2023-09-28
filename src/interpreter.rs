@@ -31,8 +31,11 @@ impl Interpreter{
         let mut parser = Parser::new(&self.tokens);
         let block = parser.parse();
         println!("Block: {:?}", block);
-        if let Some(stmt) = block{
-            stmt.execute();
+        match block{
+            None => {},
+            Some(mut block) => {
+                block.execute();
+            }
         }
     }
 

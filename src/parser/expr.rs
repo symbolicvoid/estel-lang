@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::token::*;
 
 //using PartialOrd so we can compare the enum to get its precedence
@@ -5,6 +7,7 @@ use super::token::*;
 pub enum Expr{
     //Meant to represent lack of expression
     None,
+    Ident(String),
     Literal(Literal),
     //(expr)
     Paren(Box<Expr>),
@@ -36,6 +39,9 @@ impl Expr{
     pub fn new_literal(literal: &Literal) -> Expr{
         Expr::Literal(literal.to_owned())
     }
+    pub fn new_ident(ident: &str) -> Expr{
+        Expr::Ident(ident.to_owned())
+    }
     #[allow(dead_code)]
     pub fn new_num_literal(num: i32) -> Expr{
         Expr::Literal(Literal::Number(num))
@@ -57,39 +63,45 @@ impl Expr{
         }
     }
 
-    pub fn solve(&self) -> Result<Literal, LiteralOpError>{
+    pub fn solve(&self, scope: &HashMap<String, Literal>) -> Result<Literal, LiteralOpError>{
         match self{
             Expr::None => panic!("None expression inside the AST!"),
             Expr::Paren(expr) => {
-                expr.solve()
+                expr.solve(scope)
             }
             //Division operation can only be done between two numbers
             Expr::Div(left, right) => {
-                let left = left.solve()?;
-                let right = right.solve()?;
+                let left = left.solve(scope)?;
+                let right = right.solve(scope)?;
                 left.div(right)
             }
             //Multiplication can be done between two numbers, and a string and a number
             //"Hello" * 2  => "HelloHello" 
             Expr::Mul(left, right) => {
-                let left = left.solve()?;
-                let right = right.solve()?;
+                let left = left.solve(scope)?;
+                let right = right.solve(scope)?;
                 left.mul(right)
             }
             //Can add both Strings and Numbers
             Expr::Add(left, right) => {
-                let left = left.solve()?;
-                let right = right.solve()?;
+                let left = left.solve(scope)?;
+                let right = right.solve(scope)?;
                 left.add(right)
             }
             //Can only subtract numbers
             Expr::Sub(left, right) => {
-                let left = left.solve()?;
-                let right = right.solve()?;
+                let left = left.solve(scope)?;
+                let right = right.solve(scope)?;
                 left.sub(right)
             }
             Expr::Literal(literal) => {
                 Ok(literal.to_owned())
+            }
+            Expr::Ident(name) => {
+                match scope.get(name){
+                    Some(literal) => Ok(literal.to_owned()),
+                    None => Err(LiteralOpError::UndefinedVariableError),
+                }
             }
         }
     }
@@ -364,7 +376,7 @@ mod tests{
             Literal::Number(0),
         );
         for (expr, soln) in exprs.iter().zip(solns.iter()){
-            assert_eq!(expr.solve().unwrap(), *soln);
+            assert_eq!(expr.solve(&HashMap::new()).unwrap(), *soln);
         }
     }
 }

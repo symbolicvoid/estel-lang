@@ -12,8 +12,12 @@ pub enum TokenType{
     Error(TokenErrorType),
     //Keywords
     Keyword(Keyword),
+    //Identifier with name
+    Ident(String),
     Lparen,
     Rparen,
+    // = for assignment
+    Assign,
     //Semicolon or blank line used to terminate statements
     StmtEnd,
     Eof,
@@ -156,6 +160,7 @@ impl Literal{
 pub enum LiteralOpError{
     InvalidTypeError,
     DivByZeroError,
+    UndefinedVariableError,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -169,12 +174,15 @@ pub enum Operator{
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword{
     Print,
+    //Keyword to declare identifier
+    Let,
 }
 
 impl Keyword{
     pub fn new_keyword(text: &str) -> Option<Self>{
         match text{
             "print" => Some(Self::Print),
+            "let" => Some(Self::Let),
             _ => None,
         }
     }

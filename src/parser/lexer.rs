@@ -42,12 +42,16 @@ impl Lexer{
                 //not call advance() when another function is called to lex the characters
                 //as they call advance() on their own
                 '0'..='9' => Some(self.lex_number()),
-                'a'..='z' | 'A'..='Z' => Some(self.lex_keyword()),
+                'a'..='z' | 'A'..='Z' => Some(self.lex_keyword_or_identifier()),
                 '"' | '\'' => Some(self.lex_string()),
                 '+' | '-' | '/' | '*' => {
                     let ch = ch;
                     self.advance();
                     Some(TokenType::new_operator(ch))
+                }
+                '=' => {
+                    self.advance();
+                    Some(TokenType::Assign)
                 }
                 '(' => {
                     self.advance();
@@ -151,24 +155,26 @@ impl Lexer{
         TokenType::Error(TokenErrorType::UnterminatedStringError)
     }
 
-    //Generate keyword or (todo) identifier token
-    fn lex_keyword(&mut self) -> TokenType{
+    //Generate keyword or identifier token
+    fn lex_keyword_or_identifier(&mut self) -> TokenType{
         let mut word = String::new();
         while let Some(ch) = self.current_char{
             match ch{
-                'a'..='z' | 'A'..='Z' =>{ 
+                //valid identifier names can contain letters, numbers and underscores
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '_' =>{ 
                     self.advance();
                     word.push(ch);
                 },
-                ' ' | '\n' | ';' => break,
+                ' ' | '\r' | '\n' | ';' | ')' | '+' | '-' | '*' | '/' | '=' => break,
                 _ => return TokenType::Error(TokenErrorType::InvalidTokenError),
             };
         };
-
+        
+        //check if the word is a keyword else return an identifier
         if let Some(keyword) = Keyword::new_keyword(&word){
             TokenType::Keyword(keyword)
         } else {
-            TokenType::Error(TokenErrorType::InvalidTokenError)
+            TokenType::Ident(word)
         }
     }
 
@@ -240,27 +246,29 @@ mod tests{
     fn keyword_lex(){
         //lex valid keywords
         let mut lexer = Lexer::new("print");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
         lexer = Lexer::new("print 25");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
         lexer = Lexer::new("print\n");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
         lexer = Lexer::new("print;");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
         lexer = Lexer::new("print 25;");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword());
+        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
 
-        //lex invalid keywords
-        lexer = Lexer::new("prin");
-        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
-        lexer = Lexer::new("prin 25");
-        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
-        lexer = Lexer::new("prin\n");
-        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
-        lexer = Lexer::new("prin;");
-        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
-        lexer = Lexer::new("prin 25;");
-        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword());
+        //lex valid identifiers
+        lexer = Lexer::new("hello");
+        assert_eq!(TokenType::Ident("hello".to_string()), lexer.lex_keyword_or_identifier());
+        lexer = Lexer::new("hello 25");
+        assert_eq!(TokenType::Ident("hello".to_string()), lexer.lex_keyword_or_identifier());
+        lexer = Lexer::new("hello_\n");
+        assert_eq!(TokenType::Ident("hello_".to_string()), lexer.lex_keyword_or_identifier());
+        lexer = Lexer::new("hello123;");
+        assert_eq!(TokenType::Ident("hello123".to_string()), lexer.lex_keyword_or_identifier());
+
+        //lex invalid identifiers
+        lexer = Lexer::new("h(llo");
+        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword_or_identifier());
     }
 
     //compare the expected and resulted vectors one element at a time

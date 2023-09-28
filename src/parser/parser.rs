@@ -24,7 +24,7 @@ impl<'a> Parser<'a>{
                 Some(stmt) => stmts.push(stmt),
             }
         }
-        Some(Block{stmts})
+        Some(Block::new(stmts))
     }
 
     pub fn make_statement(&mut self) -> Option<Stmt>{
@@ -35,6 +35,43 @@ impl<'a> Parser<'a>{
                 match expr{
                     None => None,
                     Some(expr) => Some(Stmt::Print(expr)),
+                }
+            }
+            TokenType::Keyword(Keyword::Let) => {
+                self.consume();
+                let name = match &self.get_current_token().class{
+                    TokenType::Ident(name) => name.to_owned(),
+                    _ => return None,
+                };
+                self.consume();
+                if let TokenType::Assign = self.get_current_token().class{
+                    //Consume the assignment operator
+                    self.consume();
+                    let expr = self.expr();
+                    match expr{
+                        None => None,
+                        Some(expr) => Some(Stmt::Assign(name, expr)),
+                    }
+                } else {
+                    None
+                }
+            }
+            TokenType::Ident(_ /*Borrow checker won't let me use the name here so ¯\_(ツ)_/¯*/) => {
+                let name = match &self.get_current_token().class{
+                    TokenType::Ident(name) => name.to_owned(),
+                    _ => return None,
+                };
+                self.consume();
+                if let TokenType::Assign = self.get_current_token().class{
+                    //Consume the assignment operator
+                    self.consume();
+                    let expr = self.expr();
+                    match expr{
+                        None => None,
+                        Some(expr) => Some(Stmt::Reassign(name, expr)),
+                    }
+                } else {
+                    None
                 }
             }
             TokenType::Literal(_) | TokenType::Lparen => {
@@ -52,16 +89,17 @@ impl<'a> Parser<'a>{
     fn expr(&mut self) -> Option<Expr>{
         println!("{:?}", self.get_current_token().class);
         match self.get_current_token().class{
-            TokenType::Literal(_) => {
+            TokenType::Literal(_) | TokenType::Ident(_) => {
                 Some(
                     {
-                        let expr = self.literal_start();
-                        //do not consume if we only get a literal
-                        if let Expr::Literal(_) = expr{
-                            expr
-                        } else {
-                            self.consume();
-                            self.merge_next_expr(expr)
+                        let expr = self.parse_binary_opr();
+                        //do not consume if we only get a literal or identifier
+                        match expr{
+                            Expr::Literal(_) | Expr::Ident(_) => expr,
+                            _ => {
+                                self.consume();
+                                self.merge_next_expr(expr)
+                            }
                         }
                     }
                 )
@@ -87,6 +125,7 @@ impl<'a> Parser<'a>{
                     let right = match &self.peek().class{
                         TokenType::Lparen => Expr::None,
                         TokenType::Literal(literal) => Expr::new_literal(&literal),
+                        TokenType::Ident(name) => Expr::new_ident(&name),
                         _ => return None,
                     };
                     Some(
@@ -118,10 +157,10 @@ impl<'a> Parser<'a>{
         }
     }
 
-    //Handles when the expression starts with a literal
+    //Handles when the expression starts with a literal or an identifier
     //Return a binary expression if the next token is an operator else literal expression
     //In case of an Rparen, set the binary's right side to None
-    fn literal_start(&mut self) -> Expr{
+    fn parse_binary_opr(&mut self) -> Expr{
         self.consume();
         let left = self.get_previous_token();
         if let TokenType::Operator(opr) = &self.get_current_token().class{
@@ -129,15 +168,25 @@ impl<'a> Parser<'a>{
             let right_expr = match &right.class{
                 TokenType::Rparen => Expr::None,
                 TokenType::Literal(literal) => Expr::new_literal(&literal),
+                TokenType::Ident(name) => Expr::new_ident(&name),
+                _ => Expr::None,
+            };
+            let left_expr = match &left.class{
+                TokenType::Literal(literal) => Expr::new_literal(&literal),
+                TokenType::Ident(name) => Expr::new_ident(&name),
                 _ => Expr::None,
             };
             Expr::new_binary_op(
-                Expr::new_literal(left.class.get_literal().unwrap()), 
+                left_expr, 
                 right_expr, 
                 opr
             )
         } else {
-            Expr::new_literal(left.class.get_literal().unwrap())
+            match &left.class{
+                TokenType::Literal(literal) => Expr::new_literal(&literal),
+                TokenType::Ident(name) => Expr::new_ident(&name),
+                _ => Expr::None,
+            }
         }
     }
 
@@ -188,15 +237,7 @@ mod tests{
     use super::super::lexer::*;
     use super::*;
 
-    #[test]
-    pub fn parse_binary_ops(){
-        let src = vec!("4+5", "7-2", "8*2", "5/5");
-        let expected = vec!(
-            Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(5)),
-            Expr::new_sub(Expr::new_num_literal(7), Expr::new_num_literal(2)), 
-            Expr::new_mul(Expr::new_num_literal(8), Expr::new_num_literal(2)),
-            Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(5)),
-        );
+    fn compare_results(src: Vec<&str>, expected: Vec<Expr>){
         for (line, expect) in src.iter().zip(expected){
             let mut lexer = Lexer::new(line);
             let parse_result = Parser::new(&lexer.lex()).parse();
@@ -208,7 +249,19 @@ mod tests{
     }
 
     #[test]
-    pub fn parse_complex_numeric_ops(){
+    fn parse_binary_ops(){
+        let src = vec!("4+5", "7-2", "8*2", "5/5");
+        let expected = vec!(
+            Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(5)),
+            Expr::new_sub(Expr::new_num_literal(7), Expr::new_num_literal(2)), 
+            Expr::new_mul(Expr::new_num_literal(8), Expr::new_num_literal(2)),
+            Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(5)),
+        );
+        compare_results(src, expected);
+    }
+
+    #[test]
+    fn parse_complex_numeric_ops(){
         let src = vec!(
             "5 * 5 + 3",
             "(4) * (5)",
@@ -261,13 +314,44 @@ mod tests{
                 )
             ),
         );
-        for (line, expect) in src.iter().zip(expected){
-            let mut lexer = Lexer::new(line);
-            let parse_result = Parser::new(&lexer.lex()).parse();
-            match &parse_result.unwrap().stmts[0]{
-                Stmt::Expr(expr) => assert_eq!(expr.to_owned(), expect),
-                _ => panic!("Stmt is not an expr statement"),
-            }
-        }
+        compare_results(src, expected);
+    }
+
+    #[test]
+    fn parse_identifier_ops(){
+        let src = vec![
+            "a + 5",
+            "a + b",
+            "a + b + c",
+            "a + b * c",
+            "a * (b + c)",
+            "(a + b) * c",
+            "(a) * (b)"
+        ];
+        let expected = vec![
+            Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(5)),
+            Expr::new_add(Expr::new_ident("a"), Expr::new_ident("b")),
+            Expr::new_add(
+                Expr::new_add(Expr::new_ident("a"), Expr::new_ident("b")), 
+                Expr::new_ident("c")
+            ),
+            Expr::new_add(
+                Expr::new_ident("a"), 
+                Expr::new_mul(Expr::new_ident("b"), Expr::new_ident("c"))
+            ),
+            Expr::new_mul(
+                Expr::new_ident("a"), 
+                Expr::new_paren(Expr::new_add(Expr::new_ident("b"), Expr::new_ident("c")))
+            ),
+            Expr::new_mul(
+                Expr::new_paren(Expr::new_add(Expr::new_ident("a"), Expr::new_ident("b"))), 
+                Expr::new_ident("c")
+            ),
+            Expr::new_mul(
+                Expr::new_paren(Expr::new_ident("a")), 
+                Expr::new_paren(Expr::new_ident("b"))
+            ),
+        ];
+        compare_results(src, expected);
     }
 }
