@@ -13,7 +13,8 @@ impl<'a> Parser<'a>{
     }
 
     //parse the tokens into an expression
-    pub fn parse(&mut self) -> Option<Block>{
+    //can take in global scope variables
+    pub fn parse(&mut self, global: Option<Block>) -> Option<Block>{
         let mut stmts = Vec::new();
         while !self.is_eof(self.pos as usize){
             let stmt = self.make_statement();
@@ -24,7 +25,11 @@ impl<'a> Parser<'a>{
                 Some(stmt) => stmts.push(stmt),
             }
         }
-        Some(Block::new(stmts))
+        if let Some(block) = global{
+            Some(Block::new_with_map(stmts, block.vars))
+        } else {
+            Some(Block::new(stmts))
+        }
     }
 
     pub fn make_statement(&mut self) -> Option<Stmt>{
@@ -61,17 +66,23 @@ impl<'a> Parser<'a>{
                     TokenType::Ident(name) => name.to_owned(),
                     _ => return None,
                 };
-                self.consume();
-                if let TokenType::Assign = self.get_current_token().class{
-                    //Consume the assignment operator
-                    self.consume();
-                    let expr = self.expr();
-                    match expr{
-                        None => None,
-                        Some(expr) => Some(Stmt::Reassign(name, expr)),
+                match &self.peek().class{
+                    TokenType::Assign => {
+                        self.consume();
+                        self.consume();
+                        let expr = self.expr();
+                        match expr{
+                            None => None,
+                            Some(expr) => Some(Stmt::Reassign(name, expr)),
+                        }
                     }
-                } else {
-                    None
+                    _ => {
+                        let expr = self.expr();
+                        match expr{
+                            None => None,
+                            Some(expr) => Some(Stmt::Expr(expr)),
+                        }
+                    }
                 }
             }
             TokenType::Literal(_) | TokenType::Lparen => {
@@ -87,7 +98,6 @@ impl<'a> Parser<'a>{
 
     //recursive function to create the ast
     fn expr(&mut self) -> Option<Expr>{
-        println!("{:?}", self.get_current_token().class);
         match self.get_current_token().class{
             TokenType::Literal(_) | TokenType::Ident(_) => {
                 Some(
@@ -147,10 +157,6 @@ impl<'a> Parser<'a>{
     //If an expression is found, merge the two expressions
     fn merge_next_expr(&mut self, expr: Expr) -> Expr{
         if let Some(next) = self.expr(){
-
-            println!("{:?}\t{:?}", &expr, &next);
-            println!("{:?}", expr.clone().merge(next.clone()));
-
             expr.merge(next)
         } else {
             expr
@@ -240,7 +246,7 @@ mod tests{
     fn compare_results(src: Vec<&str>, expected: Vec<Expr>){
         for (line, expect) in src.iter().zip(expected){
             let mut lexer = Lexer::new(line);
-            let parse_result = Parser::new(&lexer.lex()).parse();
+            let parse_result = Parser::new(&lexer.lex()).parse(None);
             match &parse_result.unwrap().stmts[0]{
                 Stmt::Expr(expr) => assert_eq!(expr.to_owned(), expect),
                 _ => panic!("Stmt is not an expr statement"),
