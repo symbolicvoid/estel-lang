@@ -42,20 +42,6 @@ impl TokenType{
             _ => TokenType::Error(TokenErrorType::InvalidTokenError),
         }
     }
-
-    pub fn get_literal(&self) -> Option<&Literal>{
-        match self{
-            Self::Literal(lit) => Some(lit),
-            _ => None,
-        }
-    }
-
-    pub fn get_operator(&self) -> Option<&Operator>{
-        match self{
-            Self::Operator(opr) => Some(opr),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -80,20 +66,6 @@ pub enum Literal{
 }
 
 impl Literal{
-    pub fn get_number(&self) -> Option<i32>{
-        match self{
-            Self::Number(num) => Some(*num),
-            _ => None,
-        }
-    }
-
-    pub fn get_string(&self) -> Option<&String>{
-        match self{
-            Self::String(string) => Some(string),
-            _ => None,
-        }
-    }
-
     pub fn to_string(&self) -> String{
         match self{
             Self::Number(num) => num.to_string(),
@@ -112,7 +84,6 @@ impl Literal{
                 Ok(Self::String(string + &num.to_string())),
             (Self::Number(num), Self::String(string)) => 
                 Ok(Self::String(num.to_string() + &string)),
-            _ => return Err(LiteralOpError::InvalidTypeError),
         }
     }
 

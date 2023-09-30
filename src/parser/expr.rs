@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::{token::*, stmt::Block};
 
 //using PartialOrd so we can compare the enum to get its precedence
@@ -163,14 +161,12 @@ pub enum ExprError{
     //ExpectedTokenError(expected, got)
     ExpectTokenError(ExpectType, Token),
     //UnexoectedTokenError(got)
-    UnexpectedTokenError(Token),
     ExpectExprError(Token),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpectType{
     Value,
-    Operator,
 }
 
 #[cfg(test)]

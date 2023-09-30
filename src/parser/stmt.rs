@@ -69,7 +69,6 @@ impl Stmt{
                     }
                 }
             }
-            _ => {}
         }
     }
 }
@@ -126,23 +125,13 @@ impl<'a> Block<'a>{
         }
     }
 
-    pub fn set_var(&mut self, name: &str, value: Literal){
-        if self.vars.contains_key(name){
-            self.vars.insert(name.to_owned(), value);
-        } else {
-            match &mut self.parent{
-                Some(parent) => parent.set_var(name, value),
-                None => {},
-            }
-        }
-    }
-
     pub fn insert_var(&mut self, name: &str, value: Literal){
         self.vars.insert(name.to_owned(), value);
     }
 
     //Insert a variable into the block's map only if it exists
-    //Also checks the parent scope and modifies them if needed
+    //Also checks the parent scope and modifies them if it exists in parent scope
+    //Return true if the variable was found and modified 
     pub fn insert_if_exists(&mut self, name: &str, value: Literal) -> bool{
         if self.vars.contains_key(name){
             self.vars.insert(name.to_owned(), value);
