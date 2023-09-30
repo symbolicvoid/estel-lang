@@ -146,6 +146,25 @@ impl Lexer{
                 //advance before returning to consume the ending character
                 self.advance();
                 return TokenType::new_string_literal(string.as_str());
+            } else if ch == '\\'{
+                //handle escape characters
+
+                //consume the backslash
+                self.advance();
+                //push the next character
+                if let Some(ch) = self.current_char{
+                    match ch{
+                        'n' => string.push('\n'),
+                        'r' => string.push('\r'),
+                        't' => string.push('\t'),
+                        '\\' => string.push('\\'),
+                        '\'' => string.push('\''),
+                        '"' => string.push('"'),
+                        _ => {},
+                    }
+                }
+                //consume the next character
+                self.advance();
             } else {
                 self.advance();
                 string.push(ch);
@@ -165,7 +184,7 @@ impl Lexer{
                     self.advance();
                     word.push(ch);
                 },
-                ' ' | '\r' | '\n' | ';' | ')' | '+' | '-' | '*' | '/' | '=' => break,
+                ' ' | '\r' | '\n' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' => break,
                 _ => return TokenType::Error(TokenErrorType::InvalidTokenError),
             };
         };
@@ -267,7 +286,7 @@ mod tests{
         assert_eq!(TokenType::Ident("hello123".to_string()), lexer.lex_keyword_or_identifier());
 
         //lex invalid identifiers
-        lexer = Lexer::new("h(llo");
+        lexer = Lexer::new("h$llo");
         assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword_or_identifier());
     }
 

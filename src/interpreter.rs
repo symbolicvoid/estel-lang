@@ -21,7 +21,7 @@ impl Interpreter{
 
     pub fn run_prompt(&mut self){
         //create a single block for a prompt session
-        let mut block: Block = Block::new(Vec::new());
+        let mut prompt_block: Block = Block::new(Vec::new(), None);
         println!(
             "{}", 
             "Entering prompt mode, use !q or !quit to exit. To run a file, use estel [filename]".green()
@@ -44,9 +44,16 @@ impl Interpreter{
                 continue;
             }
             //add new variables to the block
-            block = Parser::new(&self.tokens).parse(Some(block)).unwrap();
-            //show Expr result in prompt
-            block.execute(true);
+            let block = Parser::new(&self.tokens).parse(None);
+            match block{
+                Err(_) => continue,
+                Ok(block) => {
+                    //copy the statements from the new block to the prompt block
+                    prompt_block.stmts = block.stmts;
+                    //show Expr result in prompt
+                    prompt_block.execute(true);
+                }
+            }
         }
     }
 
@@ -68,8 +75,8 @@ impl Interpreter{
         let block = parser.parse(None);
         println!("Block: {:?}", block);
         match block{
-            None => {},
-            Some(mut block) => {
+            Err(_) => {},
+            Ok(mut block) => {
                 block.execute(false);
             }
         }

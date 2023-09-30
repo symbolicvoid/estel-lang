@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::token::*;
+use super::{token::*, stmt::Block};
 
 //using PartialOrd so we can compare the enum to get its precedence
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
@@ -63,42 +63,42 @@ impl Expr{
         }
     }
 
-    pub fn solve(&self, scope: &HashMap<String, Literal>) -> Result<Literal, LiteralOpError>{
+    pub fn solve(&self, block: &Block) -> Result<Literal, LiteralOpError>{
         match self{
             Expr::None => panic!("None expression inside the AST!"),
             Expr::Paren(expr) => {
-                expr.solve(scope)
+                expr.solve(block)
             }
             //Division operation can only be done between two numbers
             Expr::Div(left, right) => {
-                let left = left.solve(scope)?;
-                let right = right.solve(scope)?;
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
                 left.div(right)
             }
             //Multiplication can be done between two numbers, and a string and a number
             //"Hello" * 2  => "HelloHello" 
             Expr::Mul(left, right) => {
-                let left = left.solve(scope)?;
-                let right = right.solve(scope)?;
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
                 left.mul(right)
             }
             //Can add both Strings and Numbers
             Expr::Add(left, right) => {
-                let left = left.solve(scope)?;
-                let right = right.solve(scope)?;
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
                 left.add(right)
             }
             //Can only subtract numbers
             Expr::Sub(left, right) => {
-                let left = left.solve(scope)?;
-                let right = right.solve(scope)?;
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
                 left.sub(right)
             }
             Expr::Literal(literal) => {
                 Ok(literal.to_owned())
             }
             Expr::Ident(name) => {
-                match scope.get(name){
+                match block.get_var(name){
                     Some(literal) => Ok(literal.to_owned()),
                     None => Err(LiteralOpError::UndefinedVariableError),
                 }
@@ -158,8 +158,19 @@ impl Expr{
     }
 }
 
-pub enum ParseError{
-    UnexpectedToken,
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprError{
+    //ExpectedTokenError(expected, got)
+    ExpectTokenError(ExpectType, Token),
+    //UnexoectedTokenError(got)
+    UnexpectedTokenError(Token),
+    ExpectExprError(Token),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpectType{
+    Value,
+    Operator,
 }
 
 #[cfg(test)]
@@ -376,7 +387,7 @@ mod tests{
             Literal::Number(0),
         );
         for (expr, soln) in exprs.iter().zip(solns.iter()){
-            assert_eq!(expr.solve(&HashMap::new()).unwrap(), *soln);
+            assert_eq!(expr.solve(&Block::new(Vec::new(), None)).unwrap(), *soln);
         }
     }
 }

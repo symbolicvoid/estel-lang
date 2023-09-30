@@ -13,7 +13,6 @@ fn main(){
 }
 
 fn open_file(file: &str) -> String{
-    let contents = fs::read_to_string(file)
-                                .expect("Error occured when reading the file");
-    contents
+    fs::read_to_string(file)
+        .expect("Failed to read file")
 }

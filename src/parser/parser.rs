@@ -14,114 +14,140 @@ impl<'a> Parser<'a>{
 
     //parse the tokens into an expression
     //can take in global scope variables
-    pub fn parse(&mut self, global: Option<Block>) -> Option<Block>{
+    pub fn parse(&mut self, global: Option<&'a mut Block<'a>>) -> Result<Block<'a>, StmtErrors>{
         let mut stmts = Vec::new();
+        let mut errs: Vec<StmtError> = Vec::new();
         while !self.is_eof(self.pos as usize){
+            if self.get_current_token().class == TokenType::Eof{ break; }
             let stmt = self.make_statement();
             //consume the StmtEnd token
             self.consume();
             match stmt{
-                None => {},
-                Some(stmt) => stmts.push(stmt),
+                Ok(stmt) => stmts.push(stmt),
+                Err(err) => {
+                    errs.push(err);
+                    self.synchronize();
+                }
             }
         }
-        if let Some(block) = global{
-            Some(Block::new_with_map(stmts, block.vars))
+        //check if errors occured
+        if errs.len() > 0{
+            return Err(StmtErrors{errors: errs});
         } else {
-            Some(Block::new(stmts))
+            Ok(Block::new(stmts, global))
         }
     }
 
-    pub fn make_statement(&mut self) -> Option<Stmt>{
-        match self.get_current_token().class{
+    pub fn make_statement(&mut self) -> Result<Stmt, StmtError>{
+        match &self.get_current_token().class{
+
             TokenType::Keyword(Keyword::Print) => {
                 self.consume();
                 let expr = self.expr();
-                match expr{
-                    None => None,
-                    Some(expr) => Some(Stmt::Print(expr)),
-                }
+                //Error if no expr or invalid expr after print
+                Ok(Stmt::Print(self.check_expression(expr)?))
             }
+
             TokenType::Keyword(Keyword::Let) => {
                 self.consume();
                 let name = match &self.get_current_token().class{
                     TokenType::Ident(name) => name.to_owned(),
-                    _ => return None,
+                    _ => return Err(
+                        StmtError::ExpectToken(TokenType::Ident(String::new()), self.get_current_token().to_owned())
+                    ),
                 };
                 self.consume();
                 if let TokenType::Assign = self.get_current_token().class{
                     //Consume the assignment operator
                     self.consume();
                     let expr = self.expr();
-                    match expr{
-                        None => None,
-                        Some(expr) => Some(Stmt::Assign(name, expr)),
-                    }
+                    Ok(Stmt::Assign(name, self.check_expression(expr)?))
                 } else {
-                    None
+                    //Expect an assignment operator after identifier
+                    Err(
+                        StmtError::ExpectToken(TokenType::Assign, self.get_current_token().to_owned())    
+                    )
                 }
             }
-            TokenType::Ident(_ /*Borrow checker won't let me use the name here so ¯\_(ツ)_/¯*/) => {
-                let name = match &self.get_current_token().class{
-                    TokenType::Ident(name) => name.to_owned(),
-                    _ => return None,
-                };
+            TokenType::Ident(name/*Borrow checker won't let me use the name here so ¯\_(ツ)_/¯*/) => {
+                let name = name.clone();
                 match &self.peek().class{
                     TokenType::Assign => {
                         self.consume();
                         self.consume();
                         let expr = self.expr();
-                        match expr{
-                            None => None,
-                            Some(expr) => Some(Stmt::Reassign(name, expr)),
-                        }
+                        Ok(Stmt::Reassign(name, self.check_expression(expr)?))
+                    }
+                    TokenType::Operator(_) => {
+                        let expr = self.expr();
+                        Ok(Stmt::Expr(self.check_expression(expr)?))
                     }
                     _ => {
-                        let expr = self.expr();
-                        match expr{
-                            None => None,
-                            Some(expr) => Some(Stmt::Expr(expr)),
-                        }
+                        Err(
+                            StmtError::ExpectToken(TokenType::Assign, self.get_current_token().to_owned())
+                        )
                     }
                 }
             }
             TokenType::Literal(_) | TokenType::Lparen => {
                 let expr = self.expr();
-                match expr{
-                    None => None,
-                    Some(expr) => Some(Stmt::Expr(expr)),
-                }
+                Ok(Stmt::Expr(self.check_expression(expr)?))
             }
-            _ => None,
+            _ => Err(StmtError::InvalidStartToken(self.get_current_token().to_owned())),
         }
     }
 
-    //recursive function to create the ast
-    fn expr(&mut self) -> Option<Expr>{
+    //Checks the expression, if missing or invalid return a StmtError else return the unwrapped Expr
+    fn check_expression(&mut self, expr: Result<Option<Expr>, ExprError>) -> Result<Expr, StmtError>{
+        match expr{
+            Ok(expr) => 
+                {
+                    match expr{
+                        None => Err(
+                            //Return a missing expression error if no expression was found
+                            StmtError::ExpectExpression(self.get_current_token().to_owned())
+                        ),
+                        Some(expr) => Ok(expr),
+                    }
+            }
+            Err(err) => {
+                //Return an invalid expression error if the expression is invalid 
+                //using the expression's error
+                Err(StmtError::InvalidExpression(err))
+            }
+        }
+    }
+
+    //recursive function to create the expression tree
+    //Result: used to return an error if the expression is invalid
+    //Option: used to return None if there is no next expression
+    fn expr(&mut self) -> Result<Option<Expr>, ExprError>{
         match self.get_current_token().class{
             TokenType::Literal(_) | TokenType::Ident(_) => {
-                Some(
-                    {
-                        let expr = self.parse_binary_opr();
-                        //do not consume if we only get a literal or identifier
-                        match expr{
-                            Expr::Literal(_) | Expr::Ident(_) => expr,
-                            _ => {
-                                self.consume();
-                                self.merge_next_expr(expr)
+                Ok(
+                    Some(
+                        {
+                            let expr = self.parse_binary_opr()?;
+                            //do not consume if we only get a literal or identifier
+                            match expr{
+                                Expr::Literal(_) | Expr::Ident(_) => expr,
+                                _ => {
+                                    self.consume();
+                                    self.merge_next_expr(expr)?
+                                }
                             }
                         }
-                    }
+                    )
                 )
             }
             TokenType::Lparen => {
                 self.consume();
-                let paren_expr = self.expr();
+                let paren_expr = self.expr()?;
                 match paren_expr{
-                    None => None,
+                    None => Err(ExprError::ExpectExprError(self.get_current_token().to_owned())),
                     Some(expr) =>{
                         let expr = Expr::new_paren(expr);
-                        Some(self.merge_next_expr(expr))
+                        Ok(Some(self.merge_next_expr(expr)?))
                     }
                 }
             }
@@ -136,64 +162,90 @@ impl<'a> Parser<'a>{
                         TokenType::Lparen => Expr::None,
                         TokenType::Literal(literal) => Expr::new_literal(&literal),
                         TokenType::Ident(name) => Expr::new_ident(&name),
-                        _ => return None,
+                        _ => 
+                        return Err(ExprError::ExpectTokenError(ExpectType::Value, 
+                            self.get_current_token().to_owned()))
                     };
-                    Some(
-                        {
-                            let expr = Expr::new_binary_op(left, right, opr);
-                            self.consume();
-                            self.merge_next_expr(expr)
-                        }
+                    Ok(
+                        Some(
+                            {
+                                let expr = Expr::new_binary_op(left, right, opr);
+                                self.consume();
+                                self.merge_next_expr(expr)?
+                            }
+                        )
                     )
                 } else {
-                    None
+                    Ok(None)
                 }
             }
-            _ => None,
+            _ => Ok(None),
         }
     }
 
     //Takes the current expression and checks for the next one
     //If an expression is found, merge the two expressions
-    fn merge_next_expr(&mut self, expr: Expr) -> Expr{
-        if let Some(next) = self.expr(){
-            expr.merge(next)
-        } else {
-            expr
+    fn merge_next_expr(&mut self, expr: Expr) -> Result<Expr, ExprError>{
+        let next = self.expr()?;
+        match next{
+            None => Ok(expr),
+            Some(next) => {
+                Ok(expr.merge(next))
+            }
         }
     }
 
     //Handles when the expression starts with a literal or an identifier
     //Return a binary expression if the next token is an operator else literal expression
     //In case of an Rparen, set the binary's right side to None
-    fn parse_binary_opr(&mut self) -> Expr{
+    fn parse_binary_opr(&mut self) -> Result<Expr, ExprError>{
         self.consume();
         let left = self.get_previous_token();
         if let TokenType::Operator(opr) = &self.get_current_token().class{
             let right = self.peek();
             let right_expr = match &right.class{
-                TokenType::Rparen => Expr::None,
+                TokenType::Lparen => Expr::None,
                 TokenType::Literal(literal) => Expr::new_literal(&literal),
                 TokenType::Ident(name) => Expr::new_ident(&name),
-                _ => Expr::None,
+                _ => return Err(ExprError::ExpectTokenError(ExpectType::Value, right.to_owned())),
             };
             let left_expr = match &left.class{
                 TokenType::Literal(literal) => Expr::new_literal(&literal),
                 TokenType::Ident(name) => Expr::new_ident(&name),
-                _ => Expr::None,
+                _ => return Err(ExprError::ExpectTokenError(ExpectType::Value, left.to_owned())),
             };
-            Expr::new_binary_op(
-                left_expr, 
-                right_expr, 
-                opr
+            Ok(
+                Expr::new_binary_op(
+                    left_expr, 
+                    right_expr, 
+                    opr
+                )
             )
         } else {
             match &left.class{
-                TokenType::Literal(literal) => Expr::new_literal(&literal),
-                TokenType::Ident(name) => Expr::new_ident(&name),
-                _ => Expr::None,
+                TokenType::Literal(literal) => Ok(Expr::new_literal(&literal)),
+                TokenType::Ident(name) => Ok(Expr::new_ident(&name)),
+                _ => Err(ExprError::ExpectTokenError(ExpectType::Value, left.to_owned())),
             }
         }
+    }
+
+    //Move the current position to the next statement
+    //Used when errors occur
+    fn synchronize(&mut self){
+        self.consume();
+        while !self.is_eof(self.pos as usize){
+            match self.get_current_token().class{
+                TokenType::StmtEnd => {
+                    self.consume();
+                    return;
+                }
+                _ => {
+                    self.consume();
+                }
+            }
+        }
+
     }
 
     fn peek(&self) -> &Token{
@@ -245,8 +297,12 @@ mod tests{
 
     fn compare_results(src: Vec<&str>, expected: Vec<Expr>){
         for (line, expect) in src.iter().zip(expected){
+
             let mut lexer = Lexer::new(line);
-            let parse_result = Parser::new(&lexer.lex()).parse(None);
+            let tokens = lexer.lex();
+
+            let parse_result = Parser::new(&tokens).parse(None);
+            println!("{:?}", parse_result);
             match &parse_result.unwrap().stmts[0]{
                 Stmt::Expr(expr) => assert_eq!(expr.to_owned(), expect),
                 _ => panic!("Stmt is not an expr statement"),
@@ -359,5 +415,81 @@ mod tests{
             ),
         ];
         compare_results(src, expected);
+    }
+
+    #[test]
+    fn test_expr_errors(){
+        let src = vec![
+            "5 + ;",
+            "5 + 5 + \n",
+            "5 + 5 + *",
+            "5 + =",
+        ];
+
+        let error = vec![
+            ExprError::ExpectTokenError(ExpectType::Value, Token{
+                class: TokenType::StmtEnd, line: 1,  start: 4}
+            ),
+            ExprError::ExpectTokenError(ExpectType::Value, Token{
+                class: TokenType::StmtEnd, line: 2,  start: 8}
+            ),
+            ExprError::ExpectTokenError(ExpectType::Value, Token{
+                class: TokenType::Operator(Operator::Mul), line: 1,  start: 8}
+            ),
+            ExprError::ExpectTokenError(ExpectType::Value, Token{
+                class: TokenType::Assign, line: 1,  start: 4}
+            ),
+        ];
+
+        for (line, expect) in src.iter().zip(error){
+            let mut lexer = Lexer::new(line);
+            let tokens = lexer.lex();
+            let parse_result = Parser::new(&tokens).parse(None);
+            if let Err(errors) = parse_result{
+                if let StmtError::InvalidExpression(err) = &errors.errors[0]{
+                    assert_eq!(err, &expect);
+                } else {
+                    panic!("Expected an invalid expression error but got {:?}", errors.errors[0]);
+                }
+            } else {
+                panic!("Expected an error but got none");
+            }
+        }
+    }
+
+    #[test]
+    fn test_stmt_errors(){
+        let src = vec![
+            "print",
+            "let",
+            "let a",
+            "let = 5"
+        ];
+        let expecte = vec![
+            StmtError::ExpectExpression(Token{
+                class: TokenType::Eof, line: 1,  start: 5}
+            ),
+            StmtError::ExpectToken(TokenType::Ident(String::new()), Token{
+                class: TokenType::Eof, line: 1,  start: 3}
+            ),
+            StmtError::ExpectToken(TokenType::Assign, Token{
+                class: TokenType::Eof, line: 1,  start: 5}
+            ),
+            StmtError::ExpectToken(TokenType::Ident(String::new()), Token{
+                class: TokenType::Assign, line: 1,  start: 4}
+            ),
+        ];
+        for (line, err) in src.iter().zip(expecte){
+            let mut lexer = Lexer::new(line);
+            let tokens = lexer.lex();
+            let parse_result = Parser::new(&tokens).parse(None);
+            if let Err(errors) = parse_result{
+                //make sure only 1 error occured
+                assert!(errors.errors.len() == 1);
+                assert_eq!(errors.errors[0], err);
+            } else {
+                panic!("Expected an error but got none");
+            }
+        }
     }
 }

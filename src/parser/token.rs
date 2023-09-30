@@ -18,7 +18,7 @@ pub enum TokenType{
     Rparen,
     // = for assignment
     Assign,
-    //Semicolon or blank line used to terminate statements
+    //Semicolon or newline used to terminate statements
     StmtEnd,
     Eof,
 }
@@ -97,7 +97,8 @@ impl Literal{
     pub fn to_string(&self) -> String{
         match self{
             Self::Number(num) => num.to_string(),
-            Self::String(string) => string.to_owned(),
+            Self::String(string) => 
+            string.to_owned()
         }
     }
 
@@ -125,13 +126,7 @@ impl Literal{
     pub fn mul(self, other: Literal) -> Result<Literal, LiteralOpError>{
         match (self, other){
             (Self::Number(num1), Self::Number(num2)) => Ok(Self::Number(num1 * num2)),
-            (Self::String(string), Self::Number(num)) => {
-                let mut result = String::new();
-                for _ in 0..num{
-                    result += &string;
-                }
-                Ok(Self::String(result))
-            }
+            (Self::String(string), Self::Number(num)) | 
             (Self::Number(num), Self::String(string)) => {
                 let mut result = String::new();
                 for _ in 0..num{
