@@ -1,18 +1,16 @@
-use std::{ fs, env };
 use estel::interpreter::Interpreter;
+use std::{env, fs};
 
-fn main(){
+fn main() {
     let args: Vec<String> = env::args().collect();
     let mut interpreter = Interpreter::new();
-    if args.len() == 1{
+    if args.len() == 1 {
         interpreter.run_prompt();
-    }
-    else {
+    } else {
         interpreter.interpret(open_file(&args[1]));
     }
 }
 
-fn open_file(file: &str) -> String{
-    fs::read_to_string(file)
-        .expect("Failed to read file")
+fn open_file(file: &str) -> String {
+    fs::read_to_string(file).expect("Failed to read file")
 }

@@ -1,12 +1,12 @@
-use super::token::*;
 use super::errors::LexError;
+use super::token::*;
 
 //source: The source code as a vector of characters
 //line: The line number the lexer is currently at
 //pos: The position of the character the lexer is currently at
 //token_start: Store the start for the next token
 //current_char: The character at the current position of the lexer, set to None once the source ends
-pub struct Lexer{
+pub struct Lexer {
     source: Vec<char>,
     line: u32,
     pos: u32,
@@ -14,34 +14,37 @@ pub struct Lexer{
     current_char: Option<char>,
 }
 
-impl Lexer{
-    pub fn new(source: &str) -> Lexer{
+impl Lexer {
+    pub fn new(source: &str) -> Lexer {
         let source: Vec<char> = source.chars().collect();
 
         //If the source is empty, current character is to be set to None
-        let current_char = if source.len() != 0 { Some(source[0]) } else { None };
+        let current_char = if source.len() != 0 {
+            Some(source[0])
+        } else {
+            None
+        };
 
-        Self { 
+        Self {
             source,
-            line: 1, 
+            line: 1,
             pos: 0,
             token_start: 0,
-            current_char
+            current_char,
         }
     }
 
-    pub fn lex(&mut self) -> Vec<Token>{
+    pub fn lex(&mut self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
 
         //continue as long as we get some character, advance() sets current character to None at the end of string
-        while let Some(ch) = self.current_char{
-
+        while let Some(ch) = self.current_char {
             //save the start of the next token
             let token_start = self.token_start;
             //save the line of this token
             let line = self.line;
 
-            let token_type: Option<TokenType> = match ch{
+            let token_type: Option<TokenType> = match ch {
                 //not call advance() when another function is called to lex the characters
                 //as they call advance() on their own
                 '0'..='9' => Some(self.lex_number()),
@@ -78,8 +81,8 @@ impl Lexer{
                     self.line += 1;
                     //if the last token added was an StmtEnd, then don't add another
                     //else add an StmtEnd token
-                    let token_type = if let Some(token) = tokens.last(){
-                        if token.class == TokenType::StmtEnd{
+                    let token_type = if let Some(token) = tokens.last() {
+                        if token.class == TokenType::StmtEnd {
                             None
                         } else {
                             Some(TokenType::StmtEnd)
@@ -98,41 +101,44 @@ impl Lexer{
                     None
                 }
                 //error for unrecognized characters
-                _ => {
-                    Some(TokenType::Error(LexError::InvalidTokenError))
-                }
+                _ => Some(TokenType::Error(LexError::InvalidTokenError)),
             };
-            if let Some(token_type) = token_type{
+            if let Some(token_type) = token_type {
                 //synchronize to the next token after whitespace when error occurs
-                match token_type{
+                match token_type {
                     TokenType::Error(_) => self.synchronize_position(),
                     _ => {}
                 }
 
-                tokens.push(
-                    Token { 
-                        class: token_type, 
-                        start: token_start, 
-                        line: line,
-                    }
-                )
+                tokens.push(Token {
+                    class: token_type,
+                    start: token_start,
+                    line: line,
+                })
             }
         }
 
         //add an EOF token at the end of the file
-        tokens.push(Token { class: TokenType::Eof, start: self.token_start, line: self.line });
+        tokens.push(Token {
+            class: TokenType::Eof,
+            start: self.token_start,
+            line: self.line,
+        });
         tokens
     }
 
-    fn lex_number(&mut self) -> TokenType{
+    fn lex_number(&mut self) -> TokenType {
         let mut number = String::new();
-        while let Some(ch) = self.current_char{
-            match ch{
-                '0'..='9' =>{ 
+        while let Some(ch) = self.current_char {
+            match ch {
+                '0'..='9' => {
                     self.advance();
                     number.push(ch);
-                },
-                _ => return TokenType::new_number_literal(number.as_str()),
+                }
+                ' ' | '\r' | '\n' | ';' | ')' | '+' | '-' | '*' | '/' | '=' => {
+                    return TokenType::new_number_literal(number.as_str())
+                }
+                _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         }
 
@@ -140,30 +146,30 @@ impl Lexer{
         return TokenType::new_number_literal(number.as_str());
     }
 
-    fn lex_string(&mut self) -> TokenType{
+    fn lex_string(&mut self) -> TokenType {
         let mut string: String = String::new();
         let start_char = self.current_char.unwrap();
         self.advance();
-        while let Some(ch) = self.current_char{
-            if ch == start_char{
+        while let Some(ch) = self.current_char {
+            if ch == start_char {
                 //advance before returning to consume the ending character
                 self.advance();
                 return TokenType::new_string_literal(string.as_str());
-            } else if ch == '\\'{
+            } else if ch == '\\' {
                 //handle escape characters
 
                 //consume the backslash
                 self.advance();
                 //push the next character
-                if let Some(ch) = self.current_char{
-                    match ch{
+                if let Some(ch) = self.current_char {
+                    match ch {
                         'n' => string.push('\n'),
                         'r' => string.push('\r'),
                         't' => string.push('\t'),
                         '\\' => string.push('\\'),
                         '\'' => string.push('\''),
                         '"' => string.push('"'),
-                        _ => {},
+                        _ => {}
                     }
                 }
                 //consume the next character
@@ -178,22 +184,22 @@ impl Lexer{
     }
 
     //Generate keyword or identifier token
-    fn lex_keyword_or_identifier(&mut self) -> TokenType{
+    fn lex_keyword_or_identifier(&mut self) -> TokenType {
         let mut word = String::new();
-        while let Some(ch) = self.current_char{
-            match ch{
+        while let Some(ch) = self.current_char {
+            match ch {
                 //valid identifier names can contain letters, numbers and underscores
-                'a'..='z' | 'A'..='Z' | '0'..='9' | '_' =>{ 
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                     self.advance();
                     word.push(ch);
-                },
+                }
                 ' ' | '\r' | '\n' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' => break,
                 _ => return TokenType::Error(LexError::InvalidTokenError),
             };
-        };
-        
+        }
+
         //check if the word is a keyword else return an identifier
-        if let Some(keyword) = Keyword::new_keyword(&word){
+        if let Some(keyword) = Keyword::new_keyword(&word) {
             TokenType::Keyword(keyword)
         } else {
             TokenType::Ident(word)
@@ -205,19 +211,18 @@ impl Lexer{
         self.pos += 1;
         //advance token start whenever the position is advanced
         self.token_start += 1;
-        if self.pos as usize >= self.source.len(){
+        if self.pos as usize >= self.source.len() {
             self.current_char = None;
-        }
-        else {
+        } else {
             self.current_char = Some(self.source[self.pos as usize]);
         }
     }
 
     //Incase of a lexical error, move the position of the lexer to the next whitespace character to continue lexing
     //this prevents a large cascade of errors from one error
-    fn synchronize_position(&mut self){
-        while let Some(ch) = self.current_char{
-            match ch{
+    fn synchronize_position(&mut self) {
+        while let Some(ch) = self.current_char {
+            match ch {
                 ' ' | '\n' => return,
                 _ => self.advance(),
             }
@@ -225,22 +230,22 @@ impl Lexer{
     }
 
     //returns the next character without incrementing the index
-    fn peek(&mut self) -> Option<char>{
+    fn peek(&mut self) -> Option<char> {
         let pos = (self.pos + 1) as usize;
-        if pos >= self.source.len(){
-            return None
+        if pos >= self.source.len() {
+            return None;
         }
         Some(self.source[pos])
     }
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
 
     //test the lex_number function
     #[test]
-    fn num_lex(){
+    fn num_lex() {
         //lex a valid number
         let mut lexer = Lexer::new("45");
         assert_eq!(TokenType::Literal(Literal::Number(45)), lexer.lex_number());
@@ -248,7 +253,7 @@ mod tests{
 
     //test the lex_string function
     #[test]
-    fn str_lex(){
+    fn str_lex() {
         //lex valid strings
         let mut lexer = Lexer::new("\"Hello\"");
         assert_eq!(TokenType::new_string_literal("Hello"), lexer.lex_string());
@@ -259,48 +264,84 @@ mod tests{
 
         //lex invalid strings
         lexer = Lexer::new("\'Hello");
-        assert_eq!(TokenType::Error(LexError::UnterminatedStringError), lexer.lex_string());
+        assert_eq!(
+            TokenType::Error(LexError::UnterminatedStringError),
+            lexer.lex_string()
+        );
         lexer = Lexer::new("\'Hello\"");
-        assert_eq!(TokenType::Error(LexError::UnterminatedStringError), lexer.lex_string());
+        assert_eq!(
+            TokenType::Error(LexError::UnterminatedStringError),
+            lexer.lex_string()
+        );
     }
 
     #[test]
-    fn keyword_lex(){
+    fn keyword_lex() {
         //lex valid keywords
         let mut lexer = Lexer::new("print");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Keyword(Keyword::Print),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("print 25");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Keyword(Keyword::Print),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("print\n");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Keyword(Keyword::Print),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("print;");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Keyword(Keyword::Print),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("print 25;");
-        assert_eq!(TokenType::Keyword(Keyword::Print), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Keyword(Keyword::Print),
+            lexer.lex_keyword_or_identifier()
+        );
 
         //lex valid identifiers
         lexer = Lexer::new("hello");
-        assert_eq!(TokenType::Ident("hello".to_string()), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Ident("hello".to_string()),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("hello 25");
-        assert_eq!(TokenType::Ident("hello".to_string()), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Ident("hello".to_string()),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("hello_\n");
-        assert_eq!(TokenType::Ident("hello_".to_string()), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Ident("hello_".to_string()),
+            lexer.lex_keyword_or_identifier()
+        );
         lexer = Lexer::new("hello123;");
-        assert_eq!(TokenType::Ident("hello123".to_string()), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Ident("hello123".to_string()),
+            lexer.lex_keyword_or_identifier()
+        );
 
         //lex invalid identifiers
         lexer = Lexer::new("h$llo");
-        assert_eq!(TokenType::Error(LexError::InvalidTokenError), lexer.lex_keyword_or_identifier());
+        assert_eq!(
+            TokenType::Error(LexError::InvalidTokenError),
+            lexer.lex_keyword_or_identifier()
+        );
     }
 
     //compare the expected and resulted vectors one element at a time
     //prints all failed token comparisons
-    fn compare_lexer_outputs(expected: Vec<Token>, result: Vec<Token>) -> bool{
+    fn compare_lexer_outputs(expected: Vec<Token>, result: Vec<Token>) -> bool {
         let mut pass = true;
-        if expected.len() == result.len(){
+        if expected.len() == result.len() {
             let combined = expected.iter().zip(result.iter());
-            for(expect, got) in combined{
-                if expect != got{
+            for (expect, got) in combined {
+                if expect != got {
                     println!("Token test case failed!");
                     println!("expect: {:?}, got: {:?}", expect, got);
                     pass = false;
@@ -315,93 +356,93 @@ mod tests{
 
     //tests for lexing basic numeric operations
     #[test]
-    fn lex_basic_number_ops(){
+    fn lex_basic_number_ops() {
         let mut lexer = Lexer::new("25");
         let expected = [
-            Token{
+            Token {
                 class: TokenType::new_number_literal("25"),
                 start: 0,
                 line: 1,
-            }, 
-            Token{
+            },
+            Token {
                 class: TokenType::Eof,
                 start: 2,
                 line: 1,
-            }, 
+            },
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
 
         let mut lexer = Lexer::new("25+42");
         let expected = [
-            Token{
+            Token {
                 class: TokenType::new_number_literal("25"),
                 start: 0,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::new_operator('+'),
                 start: 2,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::new_number_literal("42"),
                 start: 3,
                 line: 1,
-            }, 
-            Token{
+            },
+            Token {
                 class: TokenType::Eof,
                 start: 5,
                 line: 1,
-            }, 
+            },
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
     }
 
     //test if the lexer can skip whitespaces correctly
     #[test]
-    fn test_whitespace_skips(){
+    fn test_whitespace_skips() {
         let mut lexer = Lexer::new("       25 \n");
         let expected = [
-            Token{
+            Token {
                 class: TokenType::new_number_literal("25"),
                 start: 7,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::StmtEnd,
                 start: 10,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::Eof,
                 start: 0,
                 line: 2,
-            }, 
+            },
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
 
         let mut lexer = Lexer::new("   8   -4");
         let expected = [
-            Token{
+            Token {
                 class: TokenType::new_number_literal("8"),
                 start: 3,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::new_operator('-'),
                 start: 7,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::new_number_literal("4"),
                 start: 8,
                 line: 1,
             },
-            Token{
+            Token {
                 class: TokenType::Eof,
                 start: 9,
                 line: 1,
-            }, 
+            },
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
     }
