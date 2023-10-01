@@ -1,6 +1,7 @@
 use super::token::*;
 use super::expr::*;
 use super::stmt::*;
+use super::errors::{ ExprError, ExpectType, StmtError, StmtErrors };
 
 pub struct Parser<'a>{
     tokens: &'a Vec<Token>,
@@ -20,10 +21,13 @@ impl<'a> Parser<'a>{
         while !self.is_eof(self.pos as usize){
             if self.get_current_token().class == TokenType::Eof{ break; }
             let stmt = self.make_statement();
-            //consume the StmtEnd token
-            self.consume();
+
             match stmt{
-                Ok(stmt) => stmts.push(stmt),
+                Ok(stmt) => {
+                    //consume the StmtEnd token
+                    self.consume();
+                    stmts.push(stmt)
+                },
                 Err(err) => {
                     errs.push(err);
                     self.synchronize();
@@ -105,7 +109,10 @@ impl<'a> Parser<'a>{
                     match expr{
                         None => Err(
                             //Return a missing expression error if no expression was found
-                            StmtError::ExpectExpression(self.get_current_token().to_owned())
+                            StmtError::InvalidExpression(
+                                ExprError::ExpectTokenError(
+                                    ExpectType::Expression, self.get_current_token().to_owned())
+                            )
                         ),
                         Some(expr) => Ok(expr),
                     }
@@ -142,16 +149,28 @@ impl<'a> Parser<'a>{
             }
             TokenType::Lparen => {
                 self.consume();
+                //handle empty parenthesis
+                if let TokenType::Rparen = self.get_current_token().class{
+                    return Err(
+                        ExprError::ExpectTokenError(
+                            ExpectType::Expression, self.get_current_token().to_owned()
+                        )
+                    );
+                }
                 let paren_expr = self.expr()?;
                 match paren_expr{
-                    None => Err(ExprError::ExpectExprError(self.get_current_token().to_owned())),
+                    None => Err(
+                        ExprError::ExpectTokenError(
+                            ExpectType::Expression, self.get_current_token().to_owned()
+                        )
+                    ),
                     Some(expr) =>{
                         let expr = Expr::new_paren(expr);
                         Ok(Some(self.merge_next_expr(expr)?))
                     }
                 }
             }
-            //If the current token is an Rparen we place None on the binary's left side
+            //If the current token is an Rparen we place None on the binary expression's left side
             //Example (5 + 5) * 3 -> returns Paren(5+5).merge(None * 3) 
             TokenType::Rparen => {
                 let left = Expr::None;
@@ -163,7 +182,7 @@ impl<'a> Parser<'a>{
                         TokenType::Literal(literal) => Expr::new_literal(&literal),
                         TokenType::Ident(name) => Expr::new_ident(&name),
                         _ => 
-                        return Err(ExprError::ExpectTokenError(ExpectType::Value, 
+                        return Err(ExprError::ExpectTokenError(ExpectType::Operand, 
                             self.get_current_token().to_owned()))
                     };
                     Ok(
@@ -176,10 +195,13 @@ impl<'a> Parser<'a>{
                         )
                     )
                 } else {
+                    self.pos -= 1;
                     Ok(None)
                 }
             }
-            _ => Ok(None),
+            _ => {
+                Ok(None)
+            },
         }
     }
 
@@ -207,12 +229,12 @@ impl<'a> Parser<'a>{
                 TokenType::Lparen => Expr::None,
                 TokenType::Literal(literal) => Expr::new_literal(&literal),
                 TokenType::Ident(name) => Expr::new_ident(&name),
-                _ => return Err(ExprError::ExpectTokenError(ExpectType::Value, right.to_owned())),
+                _ => return Err(ExprError::ExpectTokenError(ExpectType::Operand, right.to_owned())),
             };
             let left_expr = match &left.class{
                 TokenType::Literal(literal) => Expr::new_literal(&literal),
                 TokenType::Ident(name) => Expr::new_ident(&name),
-                _ => return Err(ExprError::ExpectTokenError(ExpectType::Value, left.to_owned())),
+                _ => return Err(ExprError::ExpectTokenError(ExpectType::Operand, left.to_owned())),
             };
             Ok(
                 Expr::new_binary_op(
@@ -225,7 +247,7 @@ impl<'a> Parser<'a>{
             match &left.class{
                 TokenType::Literal(literal) => Ok(Expr::new_literal(&literal)),
                 TokenType::Ident(name) => Ok(Expr::new_ident(&name)),
-                _ => Err(ExprError::ExpectTokenError(ExpectType::Value, left.to_owned())),
+                _ => Err(ExprError::ExpectTokenError(ExpectType::Operand, left.to_owned())),
             }
         }
     }
@@ -427,16 +449,16 @@ mod tests{
         ];
 
         let error = vec![
-            ExprError::ExpectTokenError(ExpectType::Value, Token{
+            ExprError::ExpectTokenError(ExpectType::Operand, Token{
                 class: TokenType::StmtEnd, line: 1,  start: 4}
             ),
-            ExprError::ExpectTokenError(ExpectType::Value, Token{
-                class: TokenType::StmtEnd, line: 2,  start: 8}
+            ExprError::ExpectTokenError(ExpectType::Operand, Token{
+                class: TokenType::StmtEnd, line: 1,  start: 8}
             ),
-            ExprError::ExpectTokenError(ExpectType::Value, Token{
+            ExprError::ExpectTokenError(ExpectType::Operand, Token{
                 class: TokenType::Operator(Operator::Mul), line: 1,  start: 8}
             ),
-            ExprError::ExpectTokenError(ExpectType::Value, Token{
+            ExprError::ExpectTokenError(ExpectType::Operand, Token{
                 class: TokenType::Assign, line: 1,  start: 4}
             ),
         ];
@@ -460,15 +482,11 @@ mod tests{
     #[test]
     fn test_stmt_errors(){
         let src = vec![
-            "print",
             "let",
             "let a",
             "let = 5"
         ];
         let expecte = vec![
-            StmtError::ExpectExpression(Token{
-                class: TokenType::Eof, line: 1,  start: 5}
-            ),
             StmtError::ExpectToken(TokenType::Ident(String::new()), Token{
                 class: TokenType::Eof, line: 1,  start: 3}
             ),

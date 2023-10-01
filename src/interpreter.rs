@@ -1,9 +1,11 @@
+use std::error;
 use std::io::{self, Write};
 use colored::Colorize;
 use crate::parser::parser::Parser;
 use crate::parser::stmt::Block;
-use crate::token::{Token, TokenType};
+use crate::token::{ Token, TokenType };
 use crate::lexer::Lexer;
+use crate::errors::ErrorHandler;
 
 pub struct Interpreter{
     source: String,
@@ -28,6 +30,7 @@ impl Interpreter{
         );
         loop{
             self.source.clear();
+
             print!(">>");
             io::stdout().flush().unwrap();
             io::stdin()
@@ -38,15 +41,22 @@ impl Interpreter{
                 break;
             }
 
+            let mut error_handler = ErrorHandler::new(&self.source);
+
             self.tokens = Lexer::new(&self.source).lex();
-            if self.check_lex_errors(){
-                //Stop interpreting if a lexical error occured
+            //Print lexical errors
+            if error_handler.find_lexical_errors(&self.tokens){
+                error_handler.print_lexical_errors();
                 continue;
             }
+
             //add new variables to the block
             let block = Parser::new(&self.tokens).parse(None);
             match block{
-                Err(_) => continue,
+                Err(errors) => {
+                    //handle errors using error handler
+                    error_handler.print_stmt_errors(&errors);
+                },
                 Ok(block) => {
                     //copy the statements from the new block to the prompt block
                     prompt_block.stmts = block.stmts;
@@ -59,12 +69,17 @@ impl Interpreter{
 
     pub fn interpret(&mut self, source: String){
         self.source = source;
+
+        let mut error_handler = ErrorHandler::new(&self.source);
         let mut lexer = Lexer::new(&self.source);
         self.tokens = lexer.lex();
-        if self.check_lex_errors(){
-            //Stop interpreting if a lexical error occured
+        
+        //Stop interpreting if a lexical error occured
+        if error_handler.find_lexical_errors(&self.tokens){
+            error_handler.print_lexical_errors();
             return;
         }
+
         println!("Tokens:");
         for token in self.tokens.iter(){
             println!("{:?}", token);
@@ -75,7 +90,9 @@ impl Interpreter{
         let block = parser.parse(None);
         println!("Block: {:?}", block);
         match block{
-            Err(_) => {},
+            Err(errors) => {
+                error_handler.print_stmt_errors(&errors);
+            },
             Ok(mut block) => {
                 block.execute(false);
             }

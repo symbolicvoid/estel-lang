@@ -73,20 +73,6 @@ impl Stmt{
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct StmtErrors{
-    pub errors: Vec<StmtError>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum StmtError{
-    ExpectExpression(Token),
-    InvalidStartToken(Token),
-    //ExpectToken(expected: TokenType, got: Token)
-    ExpectToken(TokenType, Token),
-    InvalidExpression(ExprError),
-}
-
 #[derive(Debug)]
 pub struct Block<'a>{
     pub stmts: Vec<Stmt>,

@@ -1,4 +1,5 @@
 use super::{token::*, stmt::Block};
+use super::errors::{LiteralOpError};
 
 //using PartialOrd so we can compare the enum to get its precedence
 #[derive(PartialEq, PartialOrd, Debug, Clone)]
@@ -154,19 +155,6 @@ impl Expr{
             }
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExprError{
-    //ExpectedTokenError(expected, got)
-    ExpectTokenError(ExpectType, Token),
-    //UnexoectedTokenError(got)
-    ExpectExprError(Token),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExpectType{
-    Value,
 }
 
 #[cfg(test)]

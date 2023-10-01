@@ -1,4 +1,5 @@
 use super::token::*;
+use super::errors::LexError;
 
 //source: The source code as a vector of characters
 //line: The line number the lexer is currently at
@@ -37,6 +38,8 @@ impl Lexer{
 
             //save the start of the next token
             let token_start = self.token_start;
+            //save the line of this token
+            let line = self.line;
 
             let token_type: Option<TokenType> = match ch{
                 //not call advance() when another function is called to lex the characters
@@ -73,8 +76,6 @@ impl Lexer{
                 //handle newline character by incrementing the line and advancing the lexer
                 '\n' => {
                     self.line += 1;
-                    //reset the start of the token relative to the line
-                    self.token_start = 0;
                     //if the last token added was an StmtEnd, then don't add another
                     //else add an StmtEnd token
                     let token_type = if let Some(token) = tokens.last(){
@@ -87,6 +88,8 @@ impl Lexer{
                         Some(TokenType::StmtEnd)
                     };
                     self.advance();
+                    //reset the start of the token relative to the line
+                    self.token_start = 0;
                     token_type
                 }
                 //do nothing for whitespaces
@@ -96,7 +99,7 @@ impl Lexer{
                 }
                 //error for unrecognized characters
                 _ => {
-                    Some(TokenType::Error(TokenErrorType::InvalidTokenError))
+                    Some(TokenType::Error(LexError::InvalidTokenError))
                 }
             };
             if let Some(token_type) = token_type{
@@ -110,14 +113,14 @@ impl Lexer{
                     Token { 
                         class: token_type, 
                         start: token_start, 
-                        line: self.line,
+                        line: line,
                     }
                 )
             }
         }
 
         //add an EOF token at the end of the file
-        tokens.push(Token { class: TokenType::Eof, start: self.pos, line: self.line });
+        tokens.push(Token { class: TokenType::Eof, start: self.token_start, line: self.line });
         tokens
     }
 
@@ -171,7 +174,7 @@ impl Lexer{
             }
         }
         //return an error for unterminated string
-        TokenType::Error(TokenErrorType::UnterminatedStringError)
+        TokenType::Error(LexError::UnterminatedStringError)
     }
 
     //Generate keyword or identifier token
@@ -185,7 +188,7 @@ impl Lexer{
                     word.push(ch);
                 },
                 ' ' | '\r' | '\n' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' => break,
-                _ => return TokenType::Error(TokenErrorType::InvalidTokenError),
+                _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         };
         
@@ -256,9 +259,9 @@ mod tests{
 
         //lex invalid strings
         lexer = Lexer::new("\'Hello");
-        assert_eq!(TokenType::Error(TokenErrorType::UnterminatedStringError), lexer.lex_string());
+        assert_eq!(TokenType::Error(LexError::UnterminatedStringError), lexer.lex_string());
         lexer = Lexer::new("\'Hello\"");
-        assert_eq!(TokenType::Error(TokenErrorType::UnterminatedStringError), lexer.lex_string());
+        assert_eq!(TokenType::Error(LexError::UnterminatedStringError), lexer.lex_string());
     }
 
     #[test]
@@ -287,7 +290,7 @@ mod tests{
 
         //lex invalid identifiers
         lexer = Lexer::new("h$llo");
-        assert_eq!(TokenType::Error(TokenErrorType::InvalidTokenError), lexer.lex_keyword_or_identifier());
+        assert_eq!(TokenType::Error(LexError::InvalidTokenError), lexer.lex_keyword_or_identifier());
     }
 
     //compare the expected and resulted vectors one element at a time
@@ -367,11 +370,11 @@ mod tests{
             Token{
                 class: TokenType::StmtEnd,
                 start: 10,
-                line: 2,
+                line: 1,
             },
             Token{
                 class: TokenType::Eof,
-                start: 11,
+                start: 0,
                 line: 2,
             }, 
         ];

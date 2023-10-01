@@ -1,3 +1,5 @@
+use super::errors::{ LexError, LiteralOpError };
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token{
     pub class: TokenType,
@@ -9,7 +11,7 @@ pub struct Token{
 pub enum TokenType{
     Literal(Literal),
     Operator(Operator),
-    Error(TokenErrorType),
+    Error(LexError),
     //Keywords
     Keyword(Keyword),
     //Identifier with name
@@ -39,22 +41,23 @@ impl TokenType{
             '-' => TokenType::Operator(Operator::Sub),
             '*' => TokenType::Operator(Operator::Mul),
             '/' => TokenType::Operator(Operator::Div),
-            _ => TokenType::Error(TokenErrorType::InvalidTokenError),
+            _ => TokenType::Error(LexError::InvalidTokenError),
         }
     }
-}
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum TokenErrorType{
-    InvalidTokenError,
-    UnterminatedStringError,
-}
-
-impl TokenErrorType{
-    pub fn get_message(&self) -> &str{
+    //Useful for error messages
+    pub fn to_string(&self) -> &str{
         match self{
-            Self::InvalidTokenError => "Unrecognized character",
-            Self::UnterminatedStringError => "Unterminated string",
+            Self::Literal(_) => "a literal",
+            Self::Operator(_) => "an operator",
+            Self::Error(_) => "error",
+            Self::Keyword(_) => "a keyword",
+            Self::Ident(_) => "an identifier",
+            Self::Lparen => "(",
+            Self::Rparen => ")",
+            Self::Assign => "=",
+            Self::StmtEnd => "the end of statement",
+            Self::Eof => "the end of file",
         }
     }
 }
@@ -120,13 +123,6 @@ impl Literal{
             _ => return Err(LiteralOpError::InvalidTypeError),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum LiteralOpError{
-    InvalidTypeError,
-    DivByZeroError,
-    UndefinedVariableError,
 }
 
 #[derive(Debug, PartialEq, Clone)]
