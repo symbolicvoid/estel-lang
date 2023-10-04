@@ -96,7 +96,7 @@ impl Lexer {
                     token_type
                 }
                 //do nothing for whitespaces
-                ' ' => {
+                ' ' | '\t' => {
                     self.advance();
                     None
                 }
@@ -135,7 +135,7 @@ impl Lexer {
                     self.advance();
                     number.push(ch);
                 }
-                ' ' | '\r' | '\n' | ';' | ')' | '+' | '-' | '*' | '/' | '=' => {
+                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '+' | '-' | '*' | '/' | '=' => {
                     return TokenType::new_number_literal(number.as_str())
                 }
                 _ => return TokenType::Error(LexError::InvalidTokenError),
@@ -193,7 +193,7 @@ impl Lexer {
                     self.advance();
                     word.push(ch);
                 }
-                ' ' | '\r' | '\n' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' => break,
+                ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' => break,
                 _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         }

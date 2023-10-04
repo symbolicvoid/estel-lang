@@ -1,15 +1,10 @@
 use super::errors::LiteralOpError;
 use super::{stmt::Block, token::*};
 
-//using PartialOrd so we can compare the enum to get its precedence
-#[derive(PartialEq, PartialOrd, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
-    //Meant to represent lack of expression
-    None,
     Ident(String),
     Literal(Literal),
-    //(expr)
-    Paren(Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
@@ -32,9 +27,6 @@ impl Expr {
     pub fn new_div(left: Expr, right: Expr) -> Expr {
         Expr::Div(Box::new(left), Box::new(right))
     }
-    pub fn new_paren(expr: Expr) -> Expr {
-        Expr::Paren(Box::new(expr))
-    }
     pub fn new_literal(literal: &Literal) -> Expr {
         Expr::Literal(literal.to_owned())
     }
@@ -56,8 +48,6 @@ impl Expr {
 
     pub fn solve(&self, block: &Block) -> Result<Literal, LiteralOpError> {
         match self {
-            Expr::None => panic!("None expression inside the AST!"),
-            Expr::Paren(expr) => expr.solve(block),
             //Division operation can only be done between two numbers
             Expr::Div(left, right) => {
                 let left = left.solve(block)?;
@@ -90,38 +80,12 @@ impl Expr {
             },
         }
     }
+}
 
-    //Merges two expressions together based on the order of their precedence
-    //For example: Merge(Add(8, 4), Mul(4, 6)) becomes:
-    // Add(8, Mul(4, 6))
-    pub fn merge(self, other: Expr) -> Expr {
-        //Bring the enums into scope for ease in reading
-        use Expr::*;
-        //return other if self is a literal
-        if let Literal(_) = self {
-            return other;
-        } else if self < other {
-            //Compare the enums based on their order using PartialOrd
-            //If the other expr has a higher precedence, we want to put self at the left of the expr
-            match other {
-                Div(left, right) => Div(Box::new(self.merge(*left)), right),
-                Mul(left, right) => Mul(Box::new(self.merge(*left)), right),
-                Add(left, right) => Add(Box::new(self.merge(*left)), right),
-                Sub(left, right) => Sub(Box::new(self.merge(*left)), right),
-                _ => other,
-            }
-        } else {
-            //Place the other expr to the right of the expr
-            match self {
-                Div(left, right) => Div(left, Box::new(right.merge(other))),
-                Mul(left, right) => Mul(left, Box::new(right.merge(other))),
-                Add(left, right) => Add(left, Box::new(right.merge(other))),
-                Sub(left, right) => Sub(left, Box::new(right.merge(other))),
-                Paren(_) => self,
-                _ => other,
-            }
-        }
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpectType {
+    Operand,
+    Operator,
 }
 
 #[cfg(test)]
@@ -182,75 +146,6 @@ mod tests {
     }
 
     #[test]
-    fn merge_exprs() {
-        // 5 + 3 * 8
-        let left = Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(3));
-        let right = Expr::new_mul(Expr::new_num_literal(3), Expr::new_num_literal(8));
-
-        assert_eq!(
-            left.merge(right.clone()),
-            // 5+(3*8)
-            Expr::Add(Box::new(Expr::new_num_literal(5)), Box::new(right))
-        );
-
-        // 5 * 3 + 8
-        let left = Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(3));
-        let right = Expr::new_add(Expr::new_num_literal(3), Expr::new_num_literal(8));
-
-        assert_eq!(
-            left.clone().merge(right),
-            //(5*3)+8
-            Expr::Add(Box::new(left), Box::new(Expr::new_num_literal(8)))
-        );
-
-        //5*5/6*6-2
-        let exprs = vec![
-            Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)),
-            Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(6)),
-            Expr::new_mul(Expr::new_num_literal(6), Expr::new_num_literal(6)),
-            Expr::new_sub(Expr::new_num_literal(6), Expr::new_num_literal(2)),
-        ];
-
-        assert_eq!(
-            exprs[0]
-                .clone()
-                .merge(exprs[1].clone())
-                .merge(exprs[2].clone())
-                .merge(exprs[3].clone()),
-            Expr::new_sub(
-                Expr::new_mul(
-                    Expr::new_mul(
-                        Expr::new_num_literal(5),
-                        Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(6))
-                    ),
-                    Expr::new_num_literal(6)
-                ),
-                Expr::new_num_literal(2)
-            )
-        );
-
-        //5*5+2-8
-        let exprs = vec![
-            Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)),
-            Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(2)),
-            Expr::new_sub(Expr::new_num_literal(2), Expr::new_num_literal(8)),
-        ];
-        assert_eq!(
-            exprs[0]
-                .clone()
-                .merge(exprs[1].clone())
-                .merge(exprs[2].clone()),
-            Expr::new_sub(
-                Expr::new_add(
-                    Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)),
-                    Expr::new_num_literal(2)
-                ),
-                Expr::new_num_literal(8)
-            )
-        );
-    }
-
-    #[test]
     fn solve_numeric_exprs() {
         let exprs = vec![
             //5*5+3
@@ -259,53 +154,32 @@ mod tests {
                 Expr::new_num_literal(3),
             ),
             //(4)*(5)
-            Expr::new_mul(
-                Expr::new_paren(Expr::new_num_literal(4)),
-                Expr::new_paren(Expr::new_num_literal(5)),
-            ),
+            Expr::new_mul(Expr::new_num_literal(4), Expr::new_num_literal(5)),
             //5*(5+3)
             Expr::new_mul(
                 Expr::new_num_literal(5),
-                Expr::new_paren(Expr::new_add(
-                    Expr::new_num_literal(5),
-                    Expr::new_num_literal(3),
-                )),
+                Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(3)),
             ),
             //5*(5+3)*2
             Expr::new_mul(
                 Expr::new_mul(
                     Expr::new_num_literal(5),
-                    Expr::new_paren(Expr::new_add(
-                        Expr::new_num_literal(5),
-                        Expr::new_num_literal(3),
-                    )),
+                    Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(3)),
                 ),
                 Expr::new_num_literal(2),
             ),
             //(4-2)*7/(4+3)
             Expr::new_mul(
-                Expr::new_paren(Expr::new_sub(
-                    Expr::new_num_literal(4),
-                    Expr::new_num_literal(2),
-                )),
+                Expr::new_sub(Expr::new_num_literal(4), Expr::new_num_literal(2)),
                 Expr::new_div(
                     Expr::new_num_literal(7),
-                    Expr::new_paren(Expr::new_add(
-                        Expr::new_num_literal(4),
-                        Expr::new_num_literal(3),
-                    )),
+                    Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(3)),
                 ),
             ),
             //(5-5)*(2+8)
             Expr::new_mul(
-                Expr::new_paren(Expr::new_sub(
-                    Expr::new_num_literal(5),
-                    Expr::new_num_literal(5),
-                )),
-                Expr::new_paren(Expr::new_add(
-                    Expr::new_num_literal(2),
-                    Expr::new_num_literal(8),
-                )),
+                Expr::new_sub(Expr::new_num_literal(5), Expr::new_num_literal(5)),
+                Expr::new_add(Expr::new_num_literal(2), Expr::new_num_literal(8)),
             ),
         ];
         let solns = vec![
@@ -313,7 +187,7 @@ mod tests {
             Literal::Number(20),
             Literal::Number(40),
             Literal::Number(80),
-            Literal::Number(2),
+            Literal::Float(2.0),
             Literal::Number(0),
         ];
         for (expr, soln) in exprs.iter().zip(solns.iter()) {

@@ -196,10 +196,11 @@ impl Literal {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+//Use PartialOrd to determine precedence
+#[derive(Debug, PartialEq, Clone, PartialOrd)]
 pub enum Operator {
-    Add,
     Sub,
+    Add,
     Mul,
     Div,
 }

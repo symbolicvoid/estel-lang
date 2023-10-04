@@ -1,3 +1,4 @@
+use super::expr::ExpectType;
 use super::token::{Token, TokenType};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -26,7 +27,7 @@ impl ExprError {
         match self {
             Self::ExpectTokenError(expect_type, _) => match expect_type {
                 ExpectType::Operand => "Expected an operand",
-                ExpectType::Expression => "Expected an expression",
+                ExpectType::Operator => "Expected an operator",
             },
         }
     }
@@ -36,12 +37,6 @@ impl ExprError {
             Self::ExpectTokenError(_, token) => (token.line, token.start),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExpectType {
-    Operand,
-    Expression,
 }
 
 #[derive(Debug, PartialEq)]
@@ -55,6 +50,8 @@ pub enum StmtError {
     //ExpectToken(expected: TokenType, got: Token)
     ExpectToken(TokenType, Token),
     InvalidExpression(ExprError),
+    ExpectedExpression(Token),
+    IncompleteStatement(Token),
 }
 
 impl StmtError {
@@ -69,6 +66,8 @@ impl StmtError {
                 )
             }
             Self::InvalidExpression(error) => format!("{}", error.get_message()),
+            Self::ExpectedExpression(_) => String::from("Expected an expression"),
+            Self::IncompleteStatement(_) => String::from("Incomplete statement"),
         }
     }
 
@@ -77,6 +76,8 @@ impl StmtError {
             Self::InvalidStartToken(token) => (token.line, token.start),
             Self::ExpectToken(_, token) => (token.line, token.start),
             Self::InvalidExpression(error) => error.get_position(),
+            Self::ExpectedExpression(token) => (token.line, token.start),
+            Self::IncompleteStatement(token) => (token.line, token.start),
         }
     }
 }
