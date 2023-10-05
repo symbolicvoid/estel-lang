@@ -23,7 +23,7 @@ impl<'a> ErrorHandler<'a> {
         for token in tokens {
             match &token.class {
                 TokenType::Error(_) => {
-                    self.lex_errors.push(&token);
+                    self.lex_errors.push(token);
                     had_error = true;
                 }
                 _ => (),
@@ -70,7 +70,7 @@ impl<'a> ErrorHandler<'a> {
     //prints a code snippet around the line where the error occured and point at the error
     fn print_code_snippet(&self, line: u32, pos: u32, surround_lines: u32) {
         let mut current_line: u32 = 1;
-        eprintln!("");
+        eprintln!();
         //prevent overflow
         let start_line = {
             if line > surround_lines {

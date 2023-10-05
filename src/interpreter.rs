@@ -35,7 +35,7 @@ impl Interpreter {
             io::stdout().flush().unwrap();
             io::stdin()
                 .read_line(&mut self.source)
-                .expect(format!("{}", "Failed to read input!".red()).as_str());
+                .unwrap_or_else(|_| panic!("{}", "Failed to read input!".red()));
 
             if self.source == "!q\r\n" || self.source == "!quit\r\n" {
                 break;

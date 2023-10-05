@@ -19,28 +19,26 @@ impl Stmt {
     pub fn execute(&self, block: &mut Block, print_expr_result: bool) {
         match self {
             Stmt::Print(expr) => {
-                let res = expr.solve(&block);
+                let res = expr.solve(block);
                 match res {
                     Ok(literal) => println!("{}", literal.to_string()),
                     Err(err) => {
                         eprintln!("{:?}", err);
-                        return;
                     }
                 }
             }
             Stmt::Assign(name, expr) => {
-                let res = expr.solve(&block);
+                let res = expr.solve(block);
                 match res {
                     Ok(value) => block.insert_var(name, value),
                     Err(err) => {
                         eprintln!("{:?}", err);
-                        return;
                     }
                 }
             }
             //Reassign only if the current variable exists in scope
             Stmt::Reassign(name, expr) => {
-                let res = expr.solve(&block);
+                let res = expr.solve(block);
                 match res {
                     Ok(value) => {
                         if !block.insert_if_exists(name, value) {
@@ -49,12 +47,11 @@ impl Stmt {
                     }
                     Err(err) => {
                         eprintln!("{:?}", err);
-                        return;
                     }
                 }
             }
             Stmt::Expr(expr) => {
-                let res = expr.solve(&block);
+                let res = expr.solve(block);
                 match res {
                     Ok(literal) => {
                         if print_expr_result {
@@ -63,7 +60,6 @@ impl Stmt {
                     }
                     Err(err) => {
                         eprintln!("{:?}", err);
-                        return;
                     }
                 }
             }
@@ -81,10 +77,7 @@ pub struct Block<'a> {
 
 impl<'a> Block<'a> {
     pub fn new(stmts: Vec<Stmt>, parent: Option<&'a mut Block<'a>>) -> Self {
-        let parent = match parent {
-            Some(parent) => Some(Box::new(parent)),
-            None => None,
-        };
+        let parent = parent.map(Box::new);
         Self {
             stmts,
             vars: HashMap::new(),
@@ -120,12 +113,10 @@ impl<'a> Block<'a> {
         if self.vars.contains_key(name) {
             self.vars.insert(name.to_owned(), value);
             true
+        } else if let Some(ref mut parent) = self.parent {
+            parent.insert_if_exists(name, value)
         } else {
-            if let Some(ref mut parent) = self.parent {
-                parent.insert_if_exists(name, value)
-            } else {
-                false
-            }
+            false
         }
     }
 }

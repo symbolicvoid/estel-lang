@@ -65,7 +65,7 @@ impl StmtError {
                     got_token.class.to_string()
                 )
             }
-            Self::InvalidExpression(error) => format!("{}", error.get_message()),
+            Self::InvalidExpression(error) => error.get_message().to_string(),
             Self::ExpectedExpression(_) => String::from("Expected an expression"),
             Self::IncompleteStatement(_) => String::from("Incomplete statement"),
         }

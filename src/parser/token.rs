@@ -188,9 +188,9 @@ impl Literal {
         //Numbers and floats are false if they are 0
         //Empty string are false
         match self {
-            Literal::Number(num) => num.to_owned() != 0,
-            Literal::String(str) => str.len() != 0,
-            Literal::Float(num) => num.to_owned() != 0.0,
+            Literal::Number(num) => *num != 0,
+            Literal::String(str) => !str.is_empty(),
+            Literal::Float(num) => *num != 0.0,
             Literal::Bool(boolean) => boolean.to_owned(),
         }
     }

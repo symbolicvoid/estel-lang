@@ -28,8 +28,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-            if stmt_tokens.len() == 0 {
-                println!("Empty statement found");
+            if stmt_tokens.is_empty() {
                 self.consume();
                 continue;
             }
@@ -42,11 +41,9 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        println!("{:?}", stmts);
-        println!("{:?}", errs);
         //check if errors occured
-        if errs.len() > 0 {
-            return Err(StmtErrors { errors: errs });
+        if !errs.is_empty() {
+            Err(StmtErrors { errors: errs })
         } else {
             Ok(Block::new(stmts, global))
         }
@@ -133,7 +130,7 @@ impl<'a> Parser<'a> {
         tokens.reverse();
 
         //check for empty list of tokens
-        if tokens.len() == 0 {
+        if tokens.is_empty() {
             return Ok(None);
         }
 
@@ -161,7 +158,7 @@ impl<'a> Parser<'a> {
                         if op <= top {
                             //pop the right operand first
                             let right = operands.pop().unwrap();
-                            let expr = Expr::new_binary_op(operands.pop().unwrap(), right, &top);
+                            let expr = Expr::new_binary_op(operands.pop().unwrap(), right, top);
                             operands.push(expr);
                             operators.pop();
                             //push the current operator
@@ -194,7 +191,7 @@ impl<'a> Parser<'a> {
                             let right = operands.pop().unwrap();
                             if let TokenType::Operator(opr) = &top.class {
                                 let expr =
-                                    Expr::new_binary_op(operands.pop().unwrap(), right, &opr);
+                                    Expr::new_binary_op(operands.pop().unwrap(), right, opr);
                                 operands.push(expr);
                                 operators.pop();
                             }
@@ -217,7 +214,7 @@ impl<'a> Parser<'a> {
         while let Some(top) = operators.last() {
             if let TokenType::Operator(opr) = &top.class {
                 let right = operands.pop().unwrap();
-                let expr = Expr::new_binary_op(operands.pop().unwrap(), right, &opr);
+                let expr = Expr::new_binary_op(operands.pop().unwrap(), right, opr);
                 operands.push(expr);
                 operators.pop();
             }

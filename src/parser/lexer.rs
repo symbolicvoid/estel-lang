@@ -19,7 +19,7 @@ impl Lexer {
         let source: Vec<char> = source.chars().collect();
 
         //If the source is empty, current character is to be set to None
-        let current_char = if source.len() != 0 {
+        let current_char = if !source.is_empty() {
             Some(source[0])
         } else {
             None
@@ -113,7 +113,7 @@ impl Lexer {
                 tokens.push(Token {
                     class: token_type,
                     start: token_start,
-                    line: line,
+                    line,
                 })
             }
         }
