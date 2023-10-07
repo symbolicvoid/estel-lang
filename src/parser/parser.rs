@@ -55,7 +55,9 @@ impl<'a> Parser<'a> {
             TokenType::Keyword(Keyword::Let) => self.make_let_stmt(stmt_tokens),
             TokenType::Keyword(Keyword::Print) => self.make_print_stmt(stmt_tokens),
             TokenType::Ident(_) => self.make_ident_stmt(stmt_tokens),
-            TokenType::Literal(_) | TokenType::Lparen => self.make_expr_stmt(stmt_tokens),
+            TokenType::Literal(_) | TokenType::Lparen | TokenType::Unary(_) => {
+                self.make_expr_stmt(stmt_tokens)
+            }
             //use swap remove since we dont care about the vector anymore
             _ => Err(StmtError::InvalidStartToken(stmt_tokens.swap_remove(0))),
         }
@@ -99,6 +101,13 @@ impl<'a> Parser<'a> {
     }
 
     fn make_ident_stmt(&mut self, mut tokens: Vec<Token>) -> Result<Stmt, StmtError> {
+        //check the length of the vector, if only one its an expression statement
+
+        if tokens.len() == 1 {
+            let expr = self.make_expr(tokens);
+            return Ok(Stmt::Expr(self.check_expression(expr)?));
+        }
+
         //check for assignment operator after the identifier
         //if there is no assignment operator, return an expression statement
         if let TokenType::Assign = &tokens[1].class {
@@ -154,22 +163,36 @@ impl<'a> Parser<'a> {
                     if expect == ExpectType::Operand {
                         return Err(ExprError::ExpectTokenError(expect, token));
                     }
-                    if let Some(TokenType::Operator(top)) = operators.last().map(|t| &t.class) {
-                        if op <= top {
-                            //pop the right operand first
+                    match operators.last().map(|t| &t.class) {
+                        Some(TokenType::Operator(top)) => {
+                            if top.precedence() >= op.precedence() {
+                                let right = operands.pop().unwrap();
+                                let expr = Expr::new_binary_op(operands.pop().unwrap(), right, top);
+                                operands.push(expr);
+                                operators.pop();
+                                operators.push(token);
+                            } else {
+                                operators.push(token);
+                            }
+                        }
+                        Some(TokenType::Unary(top)) => {
                             let right = operands.pop().unwrap();
-                            let expr = Expr::new_binary_op(operands.pop().unwrap(), right, top);
+                            let expr = Expr::new_unary_op(right, top);
                             operands.push(expr);
                             operators.pop();
-                            //push the current operator
-                            operators.push(token);
-                        } else {
                             operators.push(token);
                         }
-                    } else {
-                        operators.push(token);
+                        _ => {
+                            operators.push(token);
+                        }
                     }
                     expect = ExpectType::Operand;
+                }
+                TokenType::Unary(_) => {
+                    if expect == ExpectType::Operator {
+                        return Err(ExprError::ExpectTokenError(expect, token));
+                    }
+                    operators.push(token);
                 }
                 TokenType::Lparen => {
                     //expect parenthesis only after an operand or at the start
@@ -190,8 +213,7 @@ impl<'a> Parser<'a> {
                         } else {
                             let right = operands.pop().unwrap();
                             if let TokenType::Operator(opr) = &top.class {
-                                let expr =
-                                    Expr::new_binary_op(operands.pop().unwrap(), right, opr);
+                                let expr = Expr::new_binary_op(operands.pop().unwrap(), right, opr);
                                 operands.push(expr);
                                 operators.pop();
                             }
@@ -212,11 +234,22 @@ impl<'a> Parser<'a> {
 
         //Pop the remaining operators
         while let Some(top) = operators.last() {
-            if let TokenType::Operator(opr) = &top.class {
-                let right = operands.pop().unwrap();
-                let expr = Expr::new_binary_op(operands.pop().unwrap(), right, opr);
-                operands.push(expr);
-                operators.pop();
+            match &top.class {
+                TokenType::Lparen => {
+                    return Err(ExprError::UnterminatedParenthesis(top.clone()));
+                }
+                TokenType::Operator(opr) => {
+                    let right = operands.pop().unwrap();
+                    let expr = Expr::new_binary_op(operands.pop().unwrap(), right, opr);
+                    operands.push(expr);
+                    operators.pop();
+                }
+                TokenType::Unary(unr) => {
+                    let expr = Expr::new_unary_op(operands.pop().unwrap(), unr);
+                    operands.push(expr);
+                    operators.pop();
+                }
+                _ => {}
             }
         }
         //return the last operand
@@ -271,7 +304,7 @@ mod tests {
     use super::super::lexer::*;
     use super::*;
 
-    fn compare_results(src: Vec<&str>, expected: Vec<Expr>) {
+    fn compare_results(src: &[&str], expected: &[Expr]) {
         for (line, expect) in src.iter().zip(expected) {
             let mut lexer = Lexer::new(line);
             let tokens = lexer.lex();
@@ -279,7 +312,7 @@ mod tests {
             let parse_result = Parser::new(&tokens).parse(None);
             println!("{:?}", parse_result);
             match &parse_result.unwrap().stmts[0] {
-                Stmt::Expr(expr) => assert_eq!(expr.to_owned(), expect),
+                Stmt::Expr(expr) => assert_eq!(expr, expect),
                 _ => panic!("Stmt is not an expr statement"),
             }
         }
@@ -287,19 +320,19 @@ mod tests {
 
     #[test]
     fn parse_binary_ops() {
-        let src = vec!["4+5", "7-2", "8*2", "5/5"];
-        let expected = vec![
+        let src = ["4+5", "7-2", "8*2", "5/5"];
+        let expected = [
             Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(5)),
             Expr::new_sub(Expr::new_num_literal(7), Expr::new_num_literal(2)),
             Expr::new_mul(Expr::new_num_literal(8), Expr::new_num_literal(2)),
             Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(5)),
         ];
-        compare_results(src, expected);
+        compare_results(&src, &expected);
     }
 
     #[test]
     fn parse_complex_numeric_ops() {
-        let src = vec![
+        let src = [
             "5 * 5 + 3",
             "(4) * (5)",
             "5 * (5 + 3)",
@@ -307,7 +340,7 @@ mod tests {
             "(4-2) * 7 / (4+3)",
             "(5-5) * (2+8)",
         ];
-        let expected = vec![
+        let expected = [
             Expr::new_add(
                 Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)),
                 Expr::new_num_literal(3),
@@ -324,24 +357,24 @@ mod tests {
                 ),
                 Expr::new_num_literal(2),
             ),
-            Expr::new_mul(
-                Expr::new_sub(Expr::new_num_literal(4), Expr::new_num_literal(2)),
-                Expr::new_div(
+            Expr::new_div(
+                Expr::new_mul(
+                    Expr::new_sub(Expr::new_num_literal(4), Expr::new_num_literal(2)),
                     Expr::new_num_literal(7),
-                    Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(3)),
                 ),
+                Expr::new_add(Expr::new_num_literal(4), Expr::new_num_literal(3)),
             ),
             Expr::new_mul(
                 Expr::new_sub(Expr::new_num_literal(5), Expr::new_num_literal(5)),
                 Expr::new_add(Expr::new_num_literal(2), Expr::new_num_literal(8)),
             ),
         ];
-        compare_results(src, expected);
+        compare_results(&src, &expected);
     }
 
     #[test]
     fn parse_identifier_ops() {
-        let src = vec![
+        let src = [
             "a + 5",
             "a + b",
             "a + b + c",
@@ -350,7 +383,7 @@ mod tests {
             "(a + b) * c",
             "(a) * (b)",
         ];
-        let expected = vec![
+        let expected = [
             Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(5)),
             Expr::new_add(Expr::new_ident("a"), Expr::new_ident("b")),
             Expr::new_add(
@@ -371,7 +404,42 @@ mod tests {
             ),
             Expr::new_mul(Expr::new_ident("a"), Expr::new_ident("b")),
         ];
-        compare_results(src, expected);
+        compare_results(&src, &expected);
+    }
+
+    #[test]
+    fn parse_unary_ops() {
+        let src = [
+            "-5",
+            "-a",
+            "-(5+5)",
+            "-(a+b)",
+            "!a",
+            "!(a or b)",
+            "!a and b",
+        ];
+        let expected = [
+            Expr::Negate(Box::new(Expr::new_num_literal(5))),
+            Expr::Negate(Box::new(Expr::new_ident("a"))),
+            Expr::Negate(Box::new(Expr::new_add(
+                Expr::new_num_literal(5),
+                Expr::new_num_literal(5),
+            ))),
+            Expr::Negate(Box::new(Expr::new_add(
+                Expr::new_ident("a"),
+                Expr::new_ident("b"),
+            ))),
+            Expr::Not(Box::new(Expr::new_ident("a"))),
+            Expr::Not(Box::new(Expr::Or(
+                Box::new(Expr::new_ident("a")),
+                Box::new(Expr::new_ident("b")),
+            ))),
+            Expr::And(
+                Box::new(Expr::Not(Box::new(Expr::new_ident("a")))),
+                Box::new(Expr::new_ident("b")),
+            ),
+        ];
+        compare_results(&src, &expected);
     }
 
     #[test]

@@ -31,7 +31,7 @@ impl Interpreter {
         loop {
             self.source.clear();
 
-            print!(">>");
+            print!(">>>>");
             io::stdout().flush().unwrap();
             io::stdin()
                 .read_line(&mut self.source)
@@ -44,6 +44,7 @@ impl Interpreter {
             let mut error_handler = ErrorHandler::new(&self.source);
 
             self.tokens = Lexer::new(&self.source).lex();
+
             //Print lexical errors
             if error_handler.find_lexical_errors(&self.tokens) {
                 error_handler.print_lexical_errors();
@@ -80,15 +81,9 @@ impl Interpreter {
             return;
         }
 
-        println!("Tokens:");
-        for token in self.tokens.iter() {
-            println!("{:?}", token);
-        }
-
         //Parser
         let mut parser = Parser::new(&self.tokens);
         let block = parser.parse(None);
-        println!("Block: {:?}", block);
         match block {
             Err(errors) => {
                 error_handler.print_stmt_errors(&errors);

@@ -20,6 +20,7 @@ impl LexError {
 pub enum ExprError {
     //ExpectedTokenError(expected, got)
     ExpectTokenError(ExpectType, Token),
+    UnterminatedParenthesis(Token),
 }
 
 impl ExprError {
@@ -29,12 +30,14 @@ impl ExprError {
                 ExpectType::Operand => "Expected an operand",
                 ExpectType::Operator => "Expected an operator",
             },
+            Self::UnterminatedParenthesis(_) => "Unterminated parenthesis",
         }
     }
 
     pub fn get_position(&self) -> (u32, u32) {
         match self {
             Self::ExpectTokenError(_, token) => (token.line, token.start),
+            Self::UnterminatedParenthesis(token) => (token.line, token.start),
         }
     }
 }

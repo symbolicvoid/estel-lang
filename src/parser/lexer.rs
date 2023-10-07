@@ -50,14 +50,50 @@ impl Lexer {
                 '0'..='9' => Some(self.lex_number()),
                 'a'..='z' | 'A'..='Z' => Some(self.lex_keyword_or_identifier()),
                 '"' | '\'' => Some(self.lex_string()),
-                '+' | '-' | '/' | '*' => {
-                    let ch = ch;
+                '+' | '/' | '*' => {
                     self.advance();
-                    Some(TokenType::new_operator(ch))
+                    Some(TokenType::new_operator(&ch.to_string()))
                 }
+                //Check if - is an operator or unary
+                '-' => {
+                    self.advance();
+                    if let Some(previous) = tokens.last() {
+                        match previous.class {
+                            TokenType::Operator(_) => Some(TokenType::Unary(Unary::Neg)),
+                            _ => Some(TokenType::new_operator(&ch.to_string())),
+                        }
+                    } else {
+                        Some(TokenType::Unary(Unary::Neg))
+                    }
+                }
+                //operators which need peeking
+                '>' | '<' => {
+                    self.advance();
+                    if self.current_char == Some('=') {
+                        self.advance();
+                        Some(TokenType::new_operator(&format!("{}=", ch)))
+                    } else {
+                        Some(TokenType::new_operator(&ch.to_string()))
+                    }
+                }
+                '!' => {
+                    self.advance();
+                    if self.current_char == Some('=') {
+                        self.advance();
+                        Some(TokenType::new_operator("!="))
+                    } else {
+                        Some(TokenType::Unary(Unary::Not))
+                    }
+                }
+
                 '=' => {
                     self.advance();
-                    Some(TokenType::Assign)
+                    if self.current_char == Some('=') {
+                        self.advance();
+                        Some(TokenType::new_operator("=="))
+                    } else {
+                        Some(TokenType::Assign)
+                    }
                 }
                 '(' => {
                     self.advance();
@@ -129,21 +165,35 @@ impl Lexer {
 
     fn lex_number(&mut self) -> TokenType {
         let mut number = String::new();
+        let mut is_float = false;
         while let Some(ch) = self.current_char {
             match ch {
                 '0'..='9' => {
                     self.advance();
                     number.push(ch);
                 }
-                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '+' | '-' | '*' | '/' | '=' => {
-                    return TokenType::new_number_literal(number.as_str())
+                '.' => {
+                    if !is_float{
+                        is_float = true;
+                        self.advance();
+                        number.push(ch);
+                    } else {
+                        return TokenType::Error(LexError::InvalidTokenError);
+                    }
+                }
+                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '+' | '-' | '*' | '/' | '=' | '>' | '<' => {
+                    break;
                 }
                 _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         }
 
         //return the number when we reach EOF
-        return TokenType::new_number_literal(number.as_str());
+        if is_float{
+            TokenType::new_float_literal(number.as_str())
+        } else {
+            TokenType::new_number_literal(number.as_str())
+        }
     }
 
     fn lex_string(&mut self) -> TokenType {
@@ -193,14 +243,19 @@ impl Lexer {
                     self.advance();
                     word.push(ch);
                 }
-                ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' => break,
+                ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' | '<'
+                | '>' => break,
                 _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         }
 
-        //check if the word is a keyword else return an identifier
+        //check if the word is a keyword or other types such as an operator or literal else return an identifier
         if let Some(keyword) = Keyword::new_keyword(&word) {
             TokenType::Keyword(keyword)
+        } else if word == "and" || word == "or" {
+            TokenType::new_operator(&word)
+        } else if word == "true" || word == "false" {
+            TokenType::Literal(Literal::Bool(word == "true"))
         } else {
             TokenType::Ident(word)
         }
@@ -227,15 +282,6 @@ impl Lexer {
                 _ => self.advance(),
             }
         }
-    }
-
-    //returns the next character without incrementing the index
-    fn peek(&mut self) -> Option<char> {
-        let pos = (self.pos + 1) as usize;
-        if pos >= self.source.len() {
-            return None;
-        }
-        Some(self.source[pos])
     }
 }
 
@@ -332,6 +378,18 @@ mod tests {
             TokenType::Error(LexError::InvalidTokenError),
             lexer.lex_keyword_or_identifier()
         );
+
+        //lex and/not
+        lexer = Lexer::new("and");
+        assert_eq!(
+            TokenType::new_operator("and"),
+            lexer.lex_keyword_or_identifier()
+        );
+        lexer = Lexer::new("or");
+        assert_eq!(
+            TokenType::new_operator("or"),
+            lexer.lex_keyword_or_identifier()
+        );
     }
 
     //compare the expected and resulted vectors one element at a time
@@ -380,7 +438,7 @@ mod tests {
                 line: 1,
             },
             Token {
-                class: TokenType::new_operator('+'),
+                class: TokenType::Operator(Operator::Add),
                 start: 2,
                 line: 1,
             },
@@ -392,6 +450,199 @@ mod tests {
             Token {
                 class: TokenType::Eof,
                 start: 5,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+    }
+
+    #[test]
+    fn test_float_lexing(){
+        let mut lexer = Lexer::new("25.0");
+        let expected = [
+            Token {
+                class: TokenType::new_float_literal("25.0"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 4,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+
+        let mut lexer = Lexer::new("25.08+42.0");
+        let expected = [
+            Token {
+                class: TokenType::new_float_literal("25.08"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Add),
+                start: 5,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_float_literal("42.0"),
+                start: 6,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 10,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+    }
+
+    #[test]
+    fn test_relational_ops() {
+        let mut lexer = Lexer::new("25>42");
+        let expected = [
+            Token {
+                class: TokenType::new_number_literal("25"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Greater),
+                start: 2,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("42"),
+                start: 3,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 5,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+
+        let mut lexer = Lexer::new("25>= 42");
+        let expected = [
+            Token {
+                class: TokenType::new_number_literal("25"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::GreaterEqual),
+                start: 2,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("42"),
+                start: 5,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 7,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+
+        let mut lexer = Lexer::new("25==42");
+        let expected = [
+            Token {
+                class: TokenType::new_number_literal("25"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Equal),
+                start: 2,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("42"),
+                start: 4,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 6,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+    }
+
+    #[test]
+    fn test_unary_ops() {
+        let mut lexer = Lexer::new("-25");
+        let expected = [
+            Token {
+                class: TokenType::Unary(Unary::Neg),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("25"),
+                start: 1,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 3,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+
+        let mut lexer = Lexer::new("!true");
+        let expected = [
+            Token {
+                class: TokenType::Unary(Unary::Not),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Literal(Literal::Bool(true)),
+                start: 1,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 5,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+        let mut lexer = Lexer::new("4 + -5");
+        let expected = [
+            Token {
+                class: TokenType::new_number_literal("4"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Add),
+                start: 2,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Unary(Unary::Neg),
+                start: 4,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("5"),
+                start: 5,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 6,
                 line: 1,
             },
         ];
@@ -429,7 +680,7 @@ mod tests {
                 line: 1,
             },
             Token {
-                class: TokenType::new_operator('-'),
+                class: TokenType::new_operator("-"),
                 start: 7,
                 line: 1,
             },

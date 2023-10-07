@@ -9,6 +9,16 @@ pub enum Expr {
     Mul(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
+    Greater(Box<Expr>, Box<Expr>),
+    Less(Box<Expr>, Box<Expr>),
+    GreaterEqual(Box<Expr>, Box<Expr>),
+    LessEqual(Box<Expr>, Box<Expr>),
+    Equal(Box<Expr>, Box<Expr>),
+    NotEqual(Box<Expr>, Box<Expr>),
+    And(Box<Expr>, Box<Expr>),
+    Or(Box<Expr>, Box<Expr>),
+    Not(Box<Expr>),
+    Negate(Box<Expr>),
 }
 
 impl Expr {
@@ -27,22 +37,63 @@ impl Expr {
     pub fn new_div(left: Expr, right: Expr) -> Expr {
         Expr::Div(Box::new(left), Box::new(right))
     }
+    pub fn new_greater(left: Expr, right: Expr) -> Expr {
+        Expr::Greater(Box::new(left), Box::new(right))
+    }
+    pub fn new_less(left: Expr, right: Expr) -> Expr {
+        Expr::Less(Box::new(left), Box::new(right))
+    }
+    pub fn new_greater_equal(left: Expr, right: Expr) -> Expr {
+        Expr::GreaterEqual(Box::new(left), Box::new(right))
+    }
+    pub fn new_less_equal(left: Expr, right: Expr) -> Expr {
+        Expr::LessEqual(Box::new(left), Box::new(right))
+    }
+    pub fn new_equal(left: Expr, right: Expr) -> Expr {
+        Expr::Equal(Box::new(left), Box::new(right))
+    }
+    pub fn new_not_equal(left: Expr, right: Expr) -> Expr {
+        Expr::NotEqual(Box::new(left), Box::new(right))
+    }
+    pub fn new_and(left: Expr, right: Expr) -> Expr {
+        Expr::And(Box::new(left), Box::new(right))
+    }
+    pub fn new_or(left: Expr, right: Expr) -> Expr {
+        Expr::Or(Box::new(left), Box::new(right))
+    }
     pub fn new_literal(literal: &Literal) -> Expr {
         Expr::Literal(literal.to_owned())
     }
     pub fn new_ident(ident: &str) -> Expr {
         Expr::Ident(ident.to_owned())
     }
+
     #[allow(dead_code)]
     pub fn new_num_literal(num: i32) -> Expr {
         Expr::Literal(Literal::Number(num))
     }
+
     pub fn new_binary_op(left: Expr, right: Expr, opr: &Operator) -> Expr {
         match opr {
             Operator::Add => Expr::new_add(left, right),
             Operator::Sub => Expr::new_sub(left, right),
             Operator::Mul => Expr::new_mul(left, right),
             Operator::Div => Expr::new_div(left, right),
+            Operator::Greater => Expr::new_greater(left, right),
+            Operator::Less => Expr::new_less(left, right),
+            Operator::GreaterEqual => Expr::new_greater_equal(left, right),
+            Operator::LessEqual => Expr::new_less_equal(left, right),
+            Operator::Equal => Expr::new_equal(left, right),
+            Operator::NotEqual => Expr::new_not_equal(left, right),
+            Operator::And => Expr::new_and(left, right),
+            Operator::Or => Expr::new_or(left, right),
+        }
+    }
+
+    pub fn new_unary_op(expr: Expr, opr: &Unary) -> Expr {
+        match opr {
+            Unary::Not => Expr::Not(Box::new(expr)),
+            Unary::Neg => Expr::Negate(Box::new(expr)),
         }
     }
 
@@ -78,6 +129,54 @@ impl Expr {
                 Some(literal) => Ok(literal.to_owned()),
                 None => Err(LiteralOpError::UndefinedVariableError),
             },
+            Expr::Greater(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                left.greater(right)
+            }
+            Expr::Less(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                left.less(right)
+            }
+            Expr::GreaterEqual(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                left.greater_equal(right)
+            }
+            Expr::LessEqual(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                left.less_equal(right)
+            }
+            Expr::Equal(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                Ok(left.equal(right))
+            }
+            Expr::NotEqual(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                Ok(left.not_equal(right))
+            }
+            Expr::And(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                Ok(left.and(right))
+            }
+            Expr::Or(left, right) => {
+                let left = left.solve(block)?;
+                let right = right.solve(block)?;
+                Ok(left.or(right))
+            }
+            Expr::Not(expr) => {
+                let expr = expr.solve(block)?;
+                Ok(expr.not())
+            }
+            Expr::Negate(expr) => {
+                let expr = expr.solve(block)?;
+                expr.negate()
+            }
         }
     }
 }
@@ -90,8 +189,6 @@ pub enum ExpectType {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
-
     use super::*;
 
     #[test]
@@ -147,7 +244,7 @@ mod tests {
 
     #[test]
     fn solve_numeric_exprs() {
-        let exprs = vec![
+        let exprs = [
             //5*5+3
             Expr::new_add(
                 Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)),
@@ -182,13 +279,66 @@ mod tests {
                 Expr::new_add(Expr::new_num_literal(2), Expr::new_num_literal(8)),
             ),
         ];
-        let solns = vec![
+        let solns = [
             Literal::Number(28),
             Literal::Number(20),
             Literal::Number(40),
             Literal::Number(80),
             Literal::Float(2.0),
             Literal::Number(0),
+        ];
+        for (expr, soln) in exprs.iter().zip(solns.iter()) {
+            assert_eq!(expr.solve(&Block::new(Vec::new(), None)).unwrap(), *soln);
+        }
+    }
+
+    #[test]
+    fn solve_relational_ops() {
+        let exprs = [
+            //9>9
+            Expr::new_greater(Expr::new_num_literal(9), Expr::new_num_literal(9)),
+            //6<8
+            Expr::new_less(Expr::new_num_literal(6), Expr::new_num_literal(8)),
+            //5>=5
+            Expr::new_greater_equal(Expr::new_num_literal(5), Expr::new_num_literal(5)),
+            //12<=8
+            Expr::new_less_equal(Expr::new_num_literal(12), Expr::new_num_literal(8)),
+            //5==5
+            Expr::new_equal(Expr::new_num_literal(5), Expr::new_num_literal(5)),
+            //7!=7
+            Expr::new_not_equal(Expr::new_num_literal(7), Expr::new_num_literal(7)),
+            //7==7 and 8!=8
+            Expr::new_and(
+                Expr::new_equal(Expr::new_num_literal(7), Expr::new_num_literal(7)),
+                Expr::new_not_equal(Expr::new_num_literal(8), Expr::new_num_literal(8)),
+            ),
+            //7==7 or 8!=8
+            Expr::new_or(
+                Expr::new_equal(Expr::new_num_literal(7), Expr::new_num_literal(7)),
+                Expr::new_not_equal(Expr::new_num_literal(8), Expr::new_num_literal(8)),
+            ),
+            //"" or 1
+            Expr::new_or(
+                Expr::new_literal(&Literal::String("".to_owned())),
+                Expr::new_literal(&Literal::Number(1)),
+            ),
+            //"" and true
+            Expr::new_and(
+                Expr::new_literal(&Literal::String("".to_owned())),
+                Expr::new_literal(&Literal::Bool(true)),
+            ),
+        ];
+        let solns = [
+            Literal::Bool(false),
+            Literal::Bool(true),
+            Literal::Bool(true),
+            Literal::Bool(false),
+            Literal::Bool(true),
+            Literal::Bool(false),
+            Literal::Bool(false),
+            Literal::Bool(true),
+            Literal::Bool(true),
+            Literal::Bool(false),
         ];
         for (expr, soln) in exprs.iter().zip(solns.iter()) {
             assert_eq!(expr.solve(&Block::new(Vec::new(), None)).unwrap(), *soln);

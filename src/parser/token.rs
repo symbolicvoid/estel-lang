@@ -11,6 +11,7 @@ pub struct Token {
 pub enum TokenType {
     Literal(Literal),
     Operator(Operator),
+    Unary(Unary),
     Error(LexError),
     //Keywords
     Keyword(Keyword),
@@ -31,17 +32,38 @@ impl TokenType {
         Self::Literal(number)
     }
 
+    pub fn new_float_literal(text: &str) -> TokenType {
+        let float = Literal::Float(text.parse().unwrap());
+        Self::Literal(float)
+    }
+
     pub fn new_string_literal(text: &str) -> TokenType {
         Self::Literal(Literal::String(text.to_owned()))
     }
 
-    pub fn new_operator(text: char) -> TokenType {
+    pub fn new_operator(text: &str) -> TokenType {
         match text {
-            '+' => TokenType::Operator(Operator::Add),
-            '-' => TokenType::Operator(Operator::Sub),
-            '*' => TokenType::Operator(Operator::Mul),
-            '/' => TokenType::Operator(Operator::Div),
-            _ => TokenType::Error(LexError::InvalidTokenError),
+            "+" => Self::Operator(Operator::Add),
+            "-" => Self::Operator(Operator::Sub),
+            "*" => Self::Operator(Operator::Mul),
+            "/" => Self::Operator(Operator::Div),
+            ">" => Self::Operator(Operator::Greater),
+            "<" => Self::Operator(Operator::Less),
+            ">=" => Self::Operator(Operator::GreaterEqual),
+            "<=" => Self::Operator(Operator::LessEqual),
+            "==" => Self::Operator(Operator::Equal),
+            "!=" => Self::Operator(Operator::NotEqual),
+            "or" => Self::Operator(Operator::Or),
+            "and" => Self::Operator(Operator::And),
+            _ => panic!("Invalid operator"),
+        }
+    }
+
+    pub fn new_unary(text: char) -> TokenType {
+        match text {
+            '-' => Self::Unary(Unary::Neg),
+            '!' => Self::Unary(Unary::Not),
+            _ => panic!("Invalid unary operator"),
         }
     }
 
@@ -50,6 +72,7 @@ impl TokenType {
         match self {
             Self::Literal(_) => "a literal",
             Self::Operator(_) => "an operator",
+            Self::Unary(_) => "a unary operator",
             Self::Error(_) => "error",
             Self::Keyword(_) => "a keyword",
             Self::Ident(_) => "an identifier",
@@ -184,6 +207,74 @@ impl Literal {
         }
     }
 
+    pub fn greater(self, other: Literal) -> Result<Literal, LiteralOpError> {
+        match self {
+            Literal::Number(num1) => match other {
+                Literal::Number(num2) => Ok(Literal::Bool(num1 > num2)),
+                Literal::Float(num2) => Ok(Literal::Bool(num1 as f32 > num2)),
+                _ => Err(LiteralOpError::InvalidTypeError),
+            },
+            Literal::Float(num1) => match other {
+                Literal::Number(num2) => Ok(Literal::Bool(num1 > num2 as f32)),
+                Literal::Float(num2) => Ok(Literal::Bool(num1 > num2)),
+                _ => Err(LiteralOpError::InvalidTypeError),
+            },
+            _ => Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
+    pub fn less(self, other: Literal) -> Result<Literal, LiteralOpError> {
+        match self {
+            Literal::Number(num1) => match other {
+                Literal::Number(num2) => Ok(Literal::Bool(num1 < num2)),
+                Literal::Float(num2) => Ok(Literal::Bool((num1 as f32) < num2)),
+                _ => Err(LiteralOpError::InvalidTypeError),
+            },
+            Literal::Float(num1) => match other {
+                Literal::Number(num2) => Ok(Literal::Bool(num1 < num2 as f32)),
+                Literal::Float(num2) => Ok(Literal::Bool(num1 < num2)),
+                _ => Err(LiteralOpError::InvalidTypeError),
+            },
+            _ => Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
+    pub fn equal(self, other: Literal) -> Literal {
+        Literal::Bool(self == other)
+    }
+
+    pub fn greater_equal(self, other: Literal) -> Result<Literal, LiteralOpError> {
+        Ok(self.clone().greater(other.clone())?.or(self.equal(other)))
+    }
+
+    pub fn less_equal(self, other: Literal) -> Result<Literal, LiteralOpError> {
+        Ok(self.clone().less(other.clone())?.or(self.equal(other)))
+    }
+
+    pub fn not_equal(self, other: Literal) -> Literal {
+        self.equal(other).not()
+    }
+
+    pub fn and(self, other: Literal) -> Literal {
+        Literal::Bool(self.is_truthy() && other.is_truthy())
+    }
+
+    pub fn or(self, other: Literal) -> Literal {
+        Literal::Bool(self.is_truthy() || other.is_truthy())
+    }
+
+    pub fn not(self) -> Literal {
+        Literal::Bool(!self.is_truthy())
+    }
+
+    pub fn negate(self) -> Result<Literal, LiteralOpError> {
+        match self {
+            Literal::Number(num) => Ok(Literal::Number(-num)),
+            Literal::Float(num) => Ok(Literal::Float(-num)),
+            _ => Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
     pub fn is_truthy(&self) -> bool {
         //Numbers and floats are false if they are 0
         //Empty string are false
@@ -196,13 +287,39 @@ impl Literal {
     }
 }
 
-//Use PartialOrd to determine precedence
-#[derive(Debug, PartialEq, Clone, PartialOrd)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
     Sub,
     Add,
     Mul,
     Div,
+    Greater,
+    Less,
+    GreaterEqual,
+    LessEqual,
+    Equal,
+    NotEqual,
+    Or,
+    And,
+}
+
+impl Operator {
+    pub fn precedence(&self) -> u8{
+        match self {
+            Self::Or => 1,
+            Self::And => 2,
+            Self::Equal | Self::NotEqual => 3,
+            Self::Greater | Self::Less | Self::GreaterEqual | Self::LessEqual => 4,
+            Self::Add | Self::Sub => 5,
+            Self::Mul | Self::Div => 6,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Unary {
+    Neg,
+    Not,
 }
 
 #[derive(Debug, PartialEq, Clone)]
