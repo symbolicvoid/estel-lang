@@ -103,6 +103,14 @@ impl Lexer {
                     self.advance();
                     Some(TokenType::Rparen)
                 }
+                '{' => {
+                    self.advance();
+                    Some(TokenType::Lbrace)
+                }
+                '}' => {
+                    self.advance();
+                    Some(TokenType::Rbrace)
+                }
                 '\r' => {
                     self.advance();
                     None
@@ -173,7 +181,7 @@ impl Lexer {
                     number.push(ch);
                 }
                 '.' => {
-                    if !is_float{
+                    if !is_float {
                         is_float = true;
                         self.advance();
                         number.push(ch);
@@ -181,7 +189,8 @@ impl Lexer {
                         return TokenType::Error(LexError::InvalidTokenError);
                     }
                 }
-                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '+' | '-' | '*' | '/' | '=' | '>' | '<' => {
+                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '}' | '+' | '-' | '*' | '/' | '=' | '>'
+                | '<' => {
                     break;
                 }
                 _ => return TokenType::Error(LexError::InvalidTokenError),
@@ -189,7 +198,7 @@ impl Lexer {
         }
 
         //return the number when we reach EOF
-        if is_float{
+        if is_float {
             TokenType::new_float_literal(number.as_str())
         } else {
             TokenType::new_number_literal(number.as_str())
@@ -243,8 +252,8 @@ impl Lexer {
                     self.advance();
                     word.push(ch);
                 }
-                ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '+' | '-' | '*' | '/' | '=' | '<'
-                | '>' => break,
+                ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '{' | '}' | '+' | '-' | '*' | '/'
+                | '=' | '<' | '>' => break,
                 _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         }
@@ -457,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn test_float_lexing(){
+    fn test_float_lexing() {
         let mut lexer = Lexer::new("25.0");
         let expected = [
             Token {

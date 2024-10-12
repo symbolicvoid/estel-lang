@@ -1,7 +1,7 @@
 use crate::errors::ErrorHandler;
 use crate::lexer::Lexer;
+use crate::parser::executor::{Executor, Scope};
 use crate::parser::parser::Parser;
-use crate::parser::stmt::Block;
 use crate::token::Token;
 use colored::Colorize;
 use std::io::{self, Write};
@@ -21,8 +21,8 @@ impl Interpreter {
     }
 
     pub fn run_prompt(&mut self) {
-        //create a single block for a prompt session
-        let mut prompt_block: Block = Block::new(Vec::new(), None);
+        //create am executor that prints expressions for prompt session
+        let mut executor = Executor::new(true, Scope::new());
         println!(
             "{}",
             "Entering prompt mode, use !q or !quit to exit. To run a file, use estel [filename]"
@@ -52,17 +52,16 @@ impl Interpreter {
             }
 
             //add new variables to the block
-            let block = Parser::new(&self.tokens).parse(None);
+            let block = Parser::new(&self.tokens).parse();
             match block {
                 Err(errors) => {
                     //handle errors using error handler
                     error_handler.print_stmt_errors(&errors);
                 }
                 Ok(block) => {
-                    //copy the statements from the new block to the prompt block
-                    prompt_block.stmts = block.stmts;
-                    //show Expr result in prompt
-                    prompt_block.execute(true);
+                    for stmt in block.stmts {
+                        executor.execute_statement(&stmt);
+                    }
                 }
             }
         }
@@ -83,13 +82,18 @@ impl Interpreter {
 
         //Parser
         let mut parser = Parser::new(&self.tokens);
-        let block = parser.parse(None);
-        match block {
+
+        //Executor
+        let mut executor = Executor::new(false, Scope::new());
+
+        let program = parser.parse();
+
+        match program {
             Err(errors) => {
                 error_handler.print_stmt_errors(&errors);
             }
-            Ok(mut block) => {
-                block.execute(false);
+            Ok(program) => {
+                executor.execute_code(program);
             }
         }
     }

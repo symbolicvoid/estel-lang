@@ -15,7 +15,7 @@ impl<'a> Parser<'a> {
 
     //parse the tokens into an expression
     //can take in global scope variables
-    pub fn parse(&mut self, global: Option<&'a mut Block<'a>>) -> Result<Block<'a>, StmtErrors> {
+    pub fn parse(&mut self) -> Result<Block, StmtErrors> {
         let mut stmts = Vec::new();
         let mut errs: Vec<StmtError> = Vec::new();
         while self.get_current_token().class != TokenType::Eof {
@@ -41,11 +41,11 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        //check if errors occured
+        //check if errors occured0
         if !errs.is_empty() {
             Err(StmtErrors { errors: errs })
         } else {
-            Ok(Block::new(stmts, global))
+            Ok(Block::new(stmts))
         }
     }
 
@@ -304,12 +304,12 @@ mod tests {
     use super::super::lexer::*;
     use super::*;
 
-    fn compare_results(src: &[&str], expected: &[Expr]) {
+    fn compare_expr_parse_results(src: &[&str], expected: &[Expr]) {
         for (line, expect) in src.iter().zip(expected) {
             let mut lexer = Lexer::new(line);
             let tokens = lexer.lex();
 
-            let parse_result = Parser::new(&tokens).parse(None);
+            let parse_result = Parser::new(&tokens).parse();
             println!("{:?}", parse_result);
             match &parse_result.unwrap().stmts[0] {
                 Stmt::Expr(expr) => assert_eq!(expr, expect),
@@ -327,7 +327,7 @@ mod tests {
             Expr::new_mul(Expr::new_num_literal(8), Expr::new_num_literal(2)),
             Expr::new_div(Expr::new_num_literal(5), Expr::new_num_literal(5)),
         ];
-        compare_results(&src, &expected);
+        compare_expr_parse_results(&src, &expected);
     }
 
     #[test]
@@ -369,7 +369,7 @@ mod tests {
                 Expr::new_add(Expr::new_num_literal(2), Expr::new_num_literal(8)),
             ),
         ];
-        compare_results(&src, &expected);
+        compare_expr_parse_results(&src, &expected);
     }
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
             ),
             Expr::new_mul(Expr::new_ident("a"), Expr::new_ident("b")),
         ];
-        compare_results(&src, &expected);
+        compare_expr_parse_results(&src, &expected);
     }
 
     #[test]
@@ -439,7 +439,7 @@ mod tests {
                 Box::new(Expr::new_ident("b")),
             ),
         ];
-        compare_results(&src, &expected);
+        compare_expr_parse_results(&src, &expected);
     }
 
     #[test]
@@ -483,7 +483,7 @@ mod tests {
         for (line, expect) in src.iter().zip(error) {
             let mut lexer = Lexer::new(line);
             let tokens = lexer.lex();
-            let parse_result = Parser::new(&tokens).parse(None);
+            let parse_result = Parser::new(&tokens).parse();
             if let Err(errors) = parse_result {
                 if let StmtError::InvalidExpression(err) = &errors.errors[0] {
                     assert_eq!(err, &expect);
@@ -502,7 +502,7 @@ mod tests {
     #[test]
     fn test_stmt_errors() {
         let src = vec!["let", "let a", "let = 5"];
-        let expecte = vec![
+        let expected = vec![
             StmtError::IncompleteStatement(Token {
                 class: TokenType::Keyword(Keyword::Let),
                 line: 1,
@@ -522,10 +522,10 @@ mod tests {
                 },
             ),
         ];
-        for (line, err) in src.iter().zip(expecte) {
+        for (line, err) in src.iter().zip(expected) {
             let mut lexer = Lexer::new(line);
             let tokens = lexer.lex();
-            let parse_result = Parser::new(&tokens).parse(None);
+            let parse_result = Parser::new(&tokens).parse();
             if let Err(errors) = parse_result {
                 //make sure only 1 error occured
                 assert!(errors.errors.len() == 1);

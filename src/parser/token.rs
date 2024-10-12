@@ -19,6 +19,9 @@ pub enum TokenType {
     Ident(String),
     Lparen,
     Rparen,
+    //Block start and end
+    Lbrace,
+    Rbrace,
     // = for assignment
     Assign,
     //Semicolon or newline used to terminate statements
@@ -76,6 +79,8 @@ impl TokenType {
             Self::Error(_) => "error",
             Self::Keyword(_) => "a keyword",
             Self::Ident(_) => "an identifier",
+            Self::Lbrace => "{",
+            Self::Rbrace => "}",
             Self::Lparen => "(",
             Self::Rparen => ")",
             Self::Assign => "=",
@@ -304,7 +309,7 @@ pub enum Operator {
 }
 
 impl Operator {
-    pub fn precedence(&self) -> u8{
+    pub fn precedence(&self) -> u8 {
         match self {
             Self::Or => 1,
             Self::And => 2,

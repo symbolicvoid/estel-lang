@@ -1,5 +1,6 @@
 use super::errors::LiteralOpError;
-use super::{stmt::Block, token::*};
+use super::executor::Executor;
+use super::token::*;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
@@ -68,10 +69,22 @@ impl Expr {
         Expr::Ident(ident.to_owned())
     }
 
+    //functions used to simplify writing tests
     #[allow(dead_code)]
     pub fn new_num_literal(num: i32) -> Expr {
         Expr::Literal(Literal::Number(num))
     }
+
+    #[allow(dead_code)]
+    pub fn new_string_literal(string: &str) -> Expr {
+        Expr::Literal(Literal::String(string.to_owned()))
+    }
+
+    #[allow(dead_code)]
+    pub fn new_bool_literal(boolean: bool) -> Expr {
+        Expr::Literal(Literal::Bool(boolean))
+    }
+    //---------------------------------------------
 
     pub fn new_binary_op(left: Expr, right: Expr, opr: &Operator) -> Expr {
         match opr {
@@ -97,84 +110,84 @@ impl Expr {
         }
     }
 
-    pub fn solve(&self, block: &Block) -> Result<Literal, LiteralOpError> {
+    pub fn solve(&self, executor: &Executor) -> Result<Literal, LiteralOpError> {
         match self {
             //Division operation can only be done between two numbers
             Expr::Div(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.div(right)
             }
             //Multiplication can be done between two numbers, and a string and a number
             //"Hello" * 2  => "HelloHello"
             Expr::Mul(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.mul(right)
             }
             //Can add both Strings and Numbers
             Expr::Add(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.add(right)
             }
             //Can only subtract numbers
             Expr::Sub(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.sub(right)
             }
             Expr::Literal(literal) => Ok(literal.to_owned()),
-            Expr::Ident(name) => match block.get_var(name) {
-                Some(literal) => Ok(literal.to_owned()),
+            Expr::Ident(name) => match executor.get_var(name) {
+                Some(literal) => Ok(literal),
                 None => Err(LiteralOpError::UndefinedVariableError),
             },
             Expr::Greater(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.greater(right)
             }
             Expr::Less(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.less(right)
             }
             Expr::GreaterEqual(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.greater_equal(right)
             }
             Expr::LessEqual(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 left.less_equal(right)
             }
             Expr::Equal(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 Ok(left.equal(right))
             }
             Expr::NotEqual(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 Ok(left.not_equal(right))
             }
             Expr::And(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 Ok(left.and(right))
             }
             Expr::Or(left, right) => {
-                let left = left.solve(block)?;
-                let right = right.solve(block)?;
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
                 Ok(left.or(right))
             }
             Expr::Not(expr) => {
-                let expr = expr.solve(block)?;
+                let expr = expr.solve(executor)?;
                 Ok(expr.not())
             }
             Expr::Negate(expr) => {
-                let expr = expr.solve(block)?;
+                let expr = expr.solve(executor)?;
                 expr.negate()
             }
         }
@@ -189,6 +202,9 @@ pub enum ExpectType {
 
 #[cfg(test)]
 mod tests {
+
+    use crate::parser::executor::Scope;
+
     use super::*;
 
     #[test]
@@ -288,7 +304,10 @@ mod tests {
             Literal::Number(0),
         ];
         for (expr, soln) in exprs.iter().zip(solns.iter()) {
-            assert_eq!(expr.solve(&Block::new(Vec::new(), None)).unwrap(), *soln);
+            assert_eq!(
+                expr.solve(&Executor::new(false, Scope::new())).unwrap(),
+                *soln
+            );
         }
     }
 
@@ -341,7 +360,10 @@ mod tests {
             Literal::Bool(false),
         ];
         for (expr, soln) in exprs.iter().zip(solns.iter()) {
-            assert_eq!(expr.solve(&Block::new(Vec::new(), None)).unwrap(), *soln);
+            assert_eq!(
+                expr.solve(&Executor::new(false, Scope::new())).unwrap(),
+                *soln
+            );
         }
     }
 }
