@@ -41,7 +41,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        //check if errors occured0
+        //check if errors occured
         if !errs.is_empty() {
             Err(StmtErrors { errors: errs })
         } else {
@@ -180,7 +180,9 @@ impl<'a> Parser<'a> {
                             let expr = Expr::new_unary_op(right, top);
                             operands.push(expr);
                             operators.pop();
-                            operators.push(token);
+                            //redo the entire loop if a unary operator was found
+                            tokens.push(token);
+                            continue;
                         }
                         _ => {
                             operators.push(token);
@@ -310,7 +312,6 @@ mod tests {
             let tokens = lexer.lex();
 
             let parse_result = Parser::new(&tokens).parse();
-            println!("{:?}", parse_result);
             match &parse_result.unwrap().stmts[0] {
                 Stmt::Expr(expr) => assert_eq!(expr, expect),
                 _ => panic!("Stmt is not an expr statement"),
@@ -334,6 +335,8 @@ mod tests {
     fn parse_complex_numeric_ops() {
         let src = [
             "5 * 5 + 3",
+            "5 - 6 + 3",
+            "5 + 3 - 6",
             "(4) * (5)",
             "5 * (5 + 3)",
             "5 * (5 + 3) * 2",
@@ -344,6 +347,14 @@ mod tests {
             Expr::new_add(
                 Expr::new_mul(Expr::new_num_literal(5), Expr::new_num_literal(5)),
                 Expr::new_num_literal(3),
+            ),
+            Expr::new_add(
+                Expr::new_sub(Expr::new_num_literal(5), Expr::new_num_literal(6)),
+                Expr::new_num_literal(3),
+            ),
+            Expr::new_sub(
+                Expr::new_add(Expr::new_num_literal(5), Expr::new_num_literal(3)),
+                Expr::new_num_literal(6),
             ),
             Expr::new_mul(Expr::new_num_literal(4), Expr::new_num_literal(5)),
             Expr::new_mul(
@@ -439,6 +450,50 @@ mod tests {
                 Box::new(Expr::new_ident("b")),
             ),
         ];
+        compare_expr_parse_results(&src, &expected);
+    }
+
+    #[test]
+    fn parse_complex_unary_ops() {
+        let src = [
+            "5 - -5",
+            "6 + -5 * 3",
+            "5 * -5 + 3",
+            "-5 * -5",
+            "6 - -5 + 25 * 16",
+        ];
+        let expected = [
+            Expr::new_sub(
+                Expr::new_num_literal(5),
+                Expr::Negate(Box::new(Expr::new_num_literal(5))),
+            ),
+            Expr::new_add(
+                Expr::new_num_literal(6),
+                Expr::new_mul(
+                    Expr::Negate(Box::new(Expr::new_num_literal(5))),
+                    Expr::new_num_literal(3),
+                ),
+            ),
+            Expr::new_add(
+                Expr::new_mul(
+                    Expr::new_num_literal(5),
+                    Expr::Negate(Box::new(Expr::new_num_literal(5))),
+                ),
+                Expr::new_num_literal(3),
+            ),
+            Expr::new_mul(
+                Expr::Negate(Box::new(Expr::new_num_literal(5))),
+                Expr::Negate(Box::new(Expr::new_num_literal(5))),
+            ),
+            Expr::new_add(
+                Expr::new_sub(
+                    Expr::new_num_literal(6),
+                    Expr::Negate(Box::new(Expr::new_num_literal(5))),
+                ),
+                Expr::new_mul(Expr::new_num_literal(25), Expr::new_num_literal(16)),
+            ),
+        ];
+
         compare_expr_parse_results(&src, &expected);
     }
 

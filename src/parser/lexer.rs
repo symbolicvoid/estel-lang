@@ -608,7 +608,7 @@ mod tests {
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
 
-        let mut lexer = Lexer::new("!true");
+        lexer = Lexer::new("!true");
         let expected = [
             Token {
                 class: TokenType::Unary(Unary::Not),
@@ -627,7 +627,8 @@ mod tests {
             },
         ];
         assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
-        let mut lexer = Lexer::new("4 + -5");
+
+        lexer = Lexer::new("4 + -5");
         let expected = [
             Token {
                 class: TokenType::new_number_literal("4"),
@@ -652,6 +653,46 @@ mod tests {
             Token {
                 class: TokenType::Eof,
                 start: 6,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+
+        lexer = Lexer::new("5 - -5 + 20");
+        let expected = [
+            Token {
+                class: TokenType::new_number_literal("5"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Sub),
+                start: 2,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Unary(Unary::Neg),
+                start: 4,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("5"),
+                start: 5,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Add),
+                start: 7,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("20"),
+                start: 9,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 11,
                 line: 1,
             },
         ];

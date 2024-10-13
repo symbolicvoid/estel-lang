@@ -59,9 +59,7 @@ impl Interpreter {
                     error_handler.print_stmt_errors(&errors);
                 }
                 Ok(block) => {
-                    for stmt in block.stmts {
-                        executor.execute_statement(&stmt);
-                    }
+                    executor.execute_code(block);
                 }
             }
         }
