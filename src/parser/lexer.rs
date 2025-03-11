@@ -50,7 +50,7 @@ impl Lexer {
                 '0'..='9' => Some(self.lex_number()),
                 'a'..='z' | 'A'..='Z' => Some(self.lex_keyword_or_identifier()),
                 '"' | '\'' => Some(self.lex_string()),
-                '+' | '/' | '*' => {
+                '+' | '/' | '*' | '%' => {
                     self.advance();
                     Some(TokenType::new_operator(&ch.to_string()))
                 }
@@ -188,8 +188,8 @@ impl Lexer {
                         return TokenType::Error(LexError::InvalidTokenError);
                     }
                 }
-                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '}' | '+' | '-' | '*' | '/' | '=' | '>'
-                | '<' => {
+                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '}' | '+' | '-' | '*' | '/' | '%' | '='
+                | '>' | '<' => {
                     break;
                 }
                 _ => return TokenType::Error(LexError::InvalidTokenError),
@@ -252,7 +252,7 @@ impl Lexer {
                     word.push(ch);
                 }
                 ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '{' | '}' | '+' | '-' | '*' | '/'
-                | '=' | '<' | '>' => break,
+                | '%' | '=' | '<' | '>' => break,
                 _ => return TokenType::Error(LexError::InvalidTokenError),
             };
         }

@@ -50,6 +50,7 @@ impl TokenType {
             "-" => Self::Operator(Operator::Sub),
             "*" => Self::Operator(Operator::Mul),
             "/" => Self::Operator(Operator::Div),
+            "%" => Self::Operator(Operator::Mod),
             ">" => Self::Operator(Operator::Greater),
             "<" => Self::Operator(Operator::Less),
             ">=" => Self::Operator(Operator::GreaterEqual),
@@ -212,6 +213,17 @@ impl Literal {
         }
     }
 
+    pub fn modulus(self, other: Literal) -> Result<Literal, LiteralOpError> {
+        //can only modulo numbers
+        match self {
+            Literal::Number(num1) => match other {
+                Literal::Number(num2) => Ok(Literal::Number(num1 % num2)),
+                _ => Err(LiteralOpError::InvalidTypeError),
+            },
+            _ => Err(LiteralOpError::InvalidTypeError),
+        }
+    }
+
     pub fn greater(self, other: Literal) -> Result<Literal, LiteralOpError> {
         match self {
             Literal::Number(num1) => match other {
@@ -298,6 +310,7 @@ pub enum Operator {
     Add,
     Mul,
     Div,
+    Mod,
     Greater,
     Less,
     GreaterEqual,
@@ -316,7 +329,7 @@ impl Operator {
             Self::Equal | Self::NotEqual => 3,
             Self::Greater | Self::Less | Self::GreaterEqual | Self::LessEqual => 4,
             Self::Add | Self::Sub => 5,
-            Self::Mul | Self::Div => 6,
+            Self::Mul | Self::Div | Self::Mod => 6,
         }
     }
 }
@@ -332,6 +345,8 @@ pub enum Keyword {
     Print,
     //Keyword to declare identifier
     Let,
+    //Loop statement keywords
+    While,
 }
 
 impl Keyword {
@@ -339,6 +354,7 @@ impl Keyword {
         match text {
             "print" => Some(Self::Print),
             "let" => Some(Self::Let),
+            "while" => Some(Self::While),
             _ => None,
         }
     }

@@ -8,6 +8,7 @@ pub enum Expr {
     Literal(Literal),
     Div(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
+    Mod(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Greater(Box<Expr>, Box<Expr>),
@@ -37,6 +38,9 @@ impl Expr {
     }
     pub fn new_div(left: Expr, right: Expr) -> Expr {
         Expr::Div(Box::new(left), Box::new(right))
+    }
+    pub fn new_mod(left: Expr, right: Expr) -> Expr {
+        Expr::Mod(Box::new(left), Box::new(right))
     }
     pub fn new_greater(left: Expr, right: Expr) -> Expr {
         Expr::Greater(Box::new(left), Box::new(right))
@@ -92,6 +96,7 @@ impl Expr {
             Operator::Sub => Expr::new_sub(left, right),
             Operator::Mul => Expr::new_mul(left, right),
             Operator::Div => Expr::new_div(left, right),
+            Operator::Mod => Expr::new_mod(left, right),
             Operator::Greater => Expr::new_greater(left, right),
             Operator::Less => Expr::new_less(left, right),
             Operator::GreaterEqual => Expr::new_greater_equal(left, right),
@@ -124,6 +129,12 @@ impl Expr {
                 let left = left.solve(executor)?;
                 let right = right.solve(executor)?;
                 left.mul(right)
+            }
+            //Modulus operation can only be done between two numbers
+            Expr::Mod(left, right) => {
+                let left = left.solve(executor)?;
+                let right = right.solve(executor)?;
+                left.modulus(right)
             }
             //Can add both Strings and Numbers
             Expr::Add(left, right) => {

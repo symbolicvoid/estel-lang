@@ -9,6 +9,9 @@ pub enum Stmt {
     //Reassign(Identifier, Expression)
     //Only assign if the variable exists in scope
     Reassign(String, Expr),
+    //Loop statement
+    //While(Condition, Statements)
+    While(Expr, Vec<Stmt>),
     //Block of statements
     Block(Vec<Stmt>),
 }

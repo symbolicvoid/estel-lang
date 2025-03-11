@@ -94,6 +94,27 @@ impl Executor {
                     }
                 }
             }
+            Stmt::While(expr, stmts) => {
+                let res = expr.solve(self);
+                match res {
+                    Ok(mut cond) => {
+                        while cond.is_truthy() {
+                            let block = Block::new(stmts.to_owned());
+                            self.execute_block(block);
+                            cond = match expr.solve(self) {
+                                Ok(res) => res,
+                                Err(err) => {
+                                    eprintln!("{:?}", err);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("{:?}", err);
+                    }
+                }
+            }
             Stmt::Block(stmts) => {
                 let block = Block::new(stmts.to_owned());
                 self.execute_block(block);
@@ -321,5 +342,240 @@ mod tests {
         ];
 
         compare_scopes(blocks, expected_scopes);
+    }
+
+    #[test]
+    fn execute_basic_while_loop() {
+        let blocks = vec![
+            /*
+            let a = 5;
+            let b = 3;
+            while(a != 0){
+                b=b+1;
+                a=a-1;
+            }
+             */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(5)),
+                Stmt::Assign(String::from("b"), Expr::new_num_literal(3)),
+                Stmt::While(
+                    Expr::new_not_equal(Expr::new_ident("a"), Expr::new_num_literal(0)),
+                    vec![
+                        Stmt::Reassign(
+                            String::from("b"),
+                            Expr::new_add(Expr::new_ident("b"), Expr::new_num_literal(1)),
+                        ),
+                        Stmt::Reassign(
+                            String::from("a"),
+                            Expr::new_sub(Expr::new_ident("a"), Expr::new_num_literal(1)),
+                        ),
+                    ],
+                ),
+            ]),
+            /*
+            let a = "Hello";
+            let b = "";
+            let i = 3;
+            while(i != 0){
+                b = b + a;
+                i = i - 1;
+             */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_string_literal("Hello")),
+                Stmt::Assign(String::from("b"), Expr::new_string_literal("")),
+                Stmt::Assign(String::from("i"), Expr::new_num_literal(3)),
+                Stmt::While(
+                    Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
+                    vec![
+                        Stmt::Reassign(
+                            String::from("b"),
+                            Expr::new_add(Expr::new_ident("b"), Expr::new_ident("a")),
+                        ),
+                        Stmt::Reassign(
+                            String::from("i"),
+                            Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
+                        ),
+                    ],
+                ),
+            ]),
+            /*
+            let a = true;
+            let num = 4;
+            let i = 30;
+            while(i != 0 and a){
+                num = num + 1;
+                a = num - 8 != 0;
+                i = i - 1;
+            }
+             */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_bool_literal(true)),
+                Stmt::Assign(String::from("num"), Expr::new_num_literal(4)),
+                Stmt::Assign(String::from("i"), Expr::new_num_literal(30)),
+                Stmt::While(
+                    Expr::new_and(
+                        Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
+                        Expr::new_ident("a"),
+                    ),
+                    vec![
+                        Stmt::Reassign(
+                            String::from("num"),
+                            Expr::new_add(Expr::new_ident("num"), Expr::new_num_literal(1)),
+                        ),
+                        Stmt::Reassign(
+                            String::from("a"),
+                            Expr::new_not_equal(
+                                Expr::new_sub(Expr::new_ident("num"), Expr::new_num_literal(8)),
+                                Expr::new_num_literal(0),
+                            ),
+                        ),
+                        Stmt::Reassign(
+                            String::from("i"),
+                            Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
+                        ),
+                    ],
+                ),
+            ]),
+        ];
+        let expected_scope = vec![
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(0)),
+                    (String::from("b"), Literal::Number(8)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::String(String::from("Hello"))),
+                    (
+                        String::from("b"),
+                        Literal::String(String::from("HelloHelloHello")),
+                    ),
+                    (String::from("i"), Literal::Number(0)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Bool(false)),
+                    (String::from("num"), Literal::Number(8)),
+                    (String::from("i"), Literal::Number(26)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        ];
+        compare_scopes(blocks, expected_scope);
+    }
+
+    #[test]
+    fn execute_nested_while_loop() {
+        let blocks = vec![
+            /*
+            let a = 0;
+            let i = 5;
+            let j = 5;
+            while(i != 0){
+                while(j != 0){
+                    a = a + 1;
+                    j = j - 1;
+                }
+                i = i - 1;
+                j = 5;
+             }
+             */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(0)),
+                Stmt::Assign(String::from("i"), Expr::new_num_literal(5)),
+                Stmt::Assign(String::from("j"), Expr::new_num_literal(5)),
+                Stmt::While(
+                    Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
+                    vec![
+                        Stmt::While(
+                            Expr::new_not_equal(Expr::new_ident("j"), Expr::new_num_literal(0)),
+                            vec![
+                                Stmt::Reassign(
+                                    String::from("a"),
+                                    Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(1)),
+                                ),
+                                Stmt::Reassign(
+                                    String::from("j"),
+                                    Expr::new_sub(Expr::new_ident("j"), Expr::new_num_literal(1)),
+                                ),
+                            ],
+                        ),
+                        Stmt::Reassign(
+                            String::from("i"),
+                            Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
+                        ),
+                        Stmt::Reassign(String::from("j"), Expr::new_num_literal(5)),
+                    ],
+                ),
+            ]),
+            /*
+            let a = 0;
+            let i = 5;
+            while(i != 0){
+                while(a%10 != 2 or a < 10){
+                    a = a + 1;
+                }
+                a = a + 1;
+                i = i - 1;
+            }
+             */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(0)),
+                Stmt::Assign(String::from("i"), Expr::new_num_literal(5)),
+                Stmt::While(
+                    Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
+                    vec![
+                        Stmt::While(
+                            Expr::new_or(
+                                Expr::new_not_equal(
+                                    Expr::new_mod(Expr::new_ident("a"), Expr::new_num_literal(10)),
+                                    Expr::new_num_literal(2),
+                                ),
+                                Expr::new_less(Expr::new_ident("a"), Expr::new_num_literal(10)),
+                            ),
+                            vec![Stmt::Reassign(
+                                String::from("a"),
+                                Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(1)),
+                            )],
+                        ),
+                        Stmt::Reassign(
+                            String::from("a"),
+                            Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(1)),
+                        ),
+                        Stmt::Reassign(
+                            String::from("i"),
+                            Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
+                        ),
+                    ],
+                ),
+            ]),
+        ];
+        let expected_scope = vec![
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(25)),
+                    (String::from("i"), Literal::Number(0)),
+                    (String::from("j"), Literal::Number(5)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(53)),
+                    (String::from("i"), Literal::Number(0)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        ];
+        compare_scopes(blocks, expected_scope);
     }
 }
