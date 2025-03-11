@@ -1,6 +1,6 @@
 use super::expr::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
@@ -13,7 +13,7 @@ pub enum Stmt {
     Block(Vec<Stmt>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
 }

@@ -1,0 +1,19 @@
+let a = 25;
+let b = 10;
+{
+    let b = a + 5;
+    print b;
+    print a;
+}
+{
+    print a - b;
+}
+print "A+B= " + (a+b);
+let a = 5;{}
+print "\n-------------------------------------------------------------------\n"
+{ print "Inside Block" } print "Outside Block";
+{ print "Inside Block"; } print "Outside Block";
+print "\n-------------------------------------------------------------------\n"
+{
+    let c = (3 * "Hello") + 25 * '!';
+    print c}

@@ -11,6 +11,12 @@ pub struct Interpreter {
     tokens: Vec<Token>,
 }
 
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Interpreter {
         let source = String::from("");

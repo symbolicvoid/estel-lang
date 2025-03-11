@@ -1,0 +1,15 @@
+let a = true
+let b = true
+let c = "Hello"
+{
+    print a and b
+    let b = false
+    print a and b
+    print !c or b
+    c = c + " World!"
+    let c = "Hello"
+    c = c + " Mars!"
+    print c
+}
+print b
+print c

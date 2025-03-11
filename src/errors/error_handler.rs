@@ -21,12 +21,9 @@ impl<'a> ErrorHandler<'a> {
     pub fn find_lexical_errors(&mut self, tokens: &'a Vec<Token>) -> bool {
         let mut had_error = false;
         for token in tokens {
-            match &token.class {
-                TokenType::Error(_) => {
-                    self.lex_errors.push(token);
-                    had_error = true;
-                }
-                _ => (),
+            if let TokenType::Error(_) = &token.class {
+                self.lex_errors.push(token);
+                had_error = true;
             }
         }
         had_error

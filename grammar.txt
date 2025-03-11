@@ -1,3 +1,3 @@
 Expr => None | Literal | Paren | Div | Mul | Add | Sub
-Stmt => Expr | Print | Assign | Reassign
+Stmt => Expr | Print | Assign | Reassign | Block
 Block => Vec<Stmt>

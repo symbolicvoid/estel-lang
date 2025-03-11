@@ -47,11 +47,10 @@ impl Executor {
     }
 
     //function to execute a statement
-    //public since the interpreter executes statements directly to share scope
-    pub fn execute_statement(&mut self, stmt: &Stmt) {
+    fn execute_statement(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Print(expr) => {
-                let res = expr.solve(&self);
+                let res = expr.solve(self);
                 match res {
                     Ok(literal) => println!("{}", literal.to_string()),
                     Err(err) => {
@@ -60,7 +59,7 @@ impl Executor {
                 }
             }
             Stmt::Assign(name, expr) => {
-                let res = expr.solve(&self);
+                let res = expr.solve(self);
                 match res {
                     Ok(value) => self.insert_var(name.to_owned(), value),
                     Err(err) => {
@@ -70,7 +69,7 @@ impl Executor {
             }
             //Reassign only if the current variable exists in scope
             Stmt::Reassign(name, expr) => {
-                let res = expr.solve(&self);
+                let res = expr.solve(self);
                 match res {
                     Ok(value) => {
                         if !self.insert_if_exists(name.to_owned(), value) {
@@ -83,7 +82,7 @@ impl Executor {
                 }
             }
             Stmt::Expr(expr) => {
-                let res = expr.solve(&self);
+                let res = expr.solve(self);
                 match res {
                     Ok(literal) => {
                         if self.print_expr_result {

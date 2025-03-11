@@ -54,7 +54,7 @@ impl Lexer {
                     self.advance();
                     Some(TokenType::new_operator(&ch.to_string()))
                 }
-                //Check if - is an operator or unary
+                //Check if - is binary or unary
                 '-' => {
                     self.advance();
                     if let Some(previous) = tokens.last() {
@@ -124,7 +124,7 @@ impl Lexer {
                 '\n' => {
                     self.line += 1;
                     //if the last token added was an StmtEnd, then don't add another
-                    //else add an StmtEnd token
+                    //else add a StmtEnd token
                     let token_type = if let Some(token) = tokens.last() {
                         if token.class == TokenType::StmtEnd {
                             None
@@ -149,9 +149,8 @@ impl Lexer {
             };
             if let Some(token_type) = token_type {
                 //synchronize to the next token after whitespace when error occurs
-                match token_type {
-                    TokenType::Error(_) => self.synchronize_position(),
-                    _ => {}
+                if let TokenType::Error(_) = token_type {
+                    self.synchronize_position()
                 }
 
                 tokens.push(Token {

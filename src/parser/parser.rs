@@ -17,35 +17,108 @@ impl<'a> Parser<'a> {
     //can take in global scope variables
     pub fn parse(&mut self) -> Result<Block, StmtErrors> {
         let mut stmts = Vec::new();
-        let mut errs: Vec<StmtError> = Vec::new();
+        let mut errors: Vec<StmtError> = Vec::new();
         while self.get_current_token().class != TokenType::Eof {
-            //find the stmtend token and save all tokens before it
-            let mut stmt_tokens = Vec::new();
-            while self.get_current_token().class != TokenType::StmtEnd {
-                stmt_tokens.push(self.get_current_token().to_owned());
-                self.consume();
-                if self.get_current_token().class == TokenType::Eof {
-                    break;
-                }
-            }
-            if stmt_tokens.is_empty() {
-                self.consume();
-                continue;
-            }
-            let stmt = self.make_statement(stmt_tokens);
+            let stmt = self.make_block();
             match stmt {
-                Ok(stmt) => stmts.push(stmt),
-                Err(err) => {
-                    errs.push(err);
-                    self.consume();
+                Ok(option_stmt) => {
+                    if let Some(stmt) = option_stmt {
+                        stmts.push(stmt);
+                    }
+                }
+                Err(errs) => {
+                    for err in errs.errors {
+                        errors.push(err);
+                    }
                 }
             }
         }
         //check if errors occured
-        if !errs.is_empty() {
-            Err(StmtErrors { errors: errs })
+        if !errors.is_empty() {
+            Err(StmtErrors { errors })
         } else {
             Ok(Block::new(stmts))
+        }
+    }
+
+    fn make_block(&mut self) -> Result<Option<Stmt>, StmtErrors> {
+        //check for tokens that specify a block: {
+        match self.get_current_token().class {
+            //Left brace starts a block that ends with a right brace
+            TokenType::Lbrace => {
+                //store starting token in case of error
+                let start = self.get_current_token().to_owned();
+                //consume the starting brace
+                self.consume();
+                let mut stmts = Vec::new();
+                let mut errors = Vec::new();
+                while self.get_current_token().class != TokenType::Rbrace {
+                    if self.get_current_token().class == TokenType::Eof {
+                        //return unterminated block error
+                        errors.push(StmtError::UnterminatedBlock(start));
+                        break;
+                    }
+                    let stmt = self.make_block();
+                    match stmt {
+                        Ok(option_stmt) => {
+                            if let Some(stmt) = option_stmt {
+                                stmts.push(stmt);
+                            }
+                        }
+                        Err(errs) => {
+                            for err in errs.errors {
+                                errors.push(err);
+                            }
+                        }
+                    }
+                }
+                //consume the right brace
+                self.consume();
+                if errors.is_empty() {
+                    Ok(Some(Stmt::Block(stmts)))
+                } else {
+                    Err(StmtErrors { errors })
+                }
+            }
+            //handle right braces with no corresponding left brace
+            TokenType::Rbrace => {
+                let right_brace = self.get_current_token().to_owned();
+                self.consume();
+                //synchronize the position to the next line
+                while self.get_current_token().class != TokenType::StmtEnd {
+                    if self.get_current_token().class == TokenType::Eof {
+                        break;
+                    }
+                    self.consume();
+                }
+                Err(StmtErrors {
+                    errors: vec![StmtError::UnexpectedBlockClose(right_brace)],
+                })
+            }
+            //other tokens means there is a non-block statement
+            _ => {
+                //find the stmtend token and save all tokens before it
+                let mut stmt_tokens = Vec::new();
+                while self.get_current_token().class != TokenType::StmtEnd {
+                    stmt_tokens.push(self.get_current_token().to_owned());
+                    self.consume();
+                    if self.get_current_token().class == TokenType::Eof
+                        || self.get_current_token().class == TokenType::Rbrace
+                        || self.get_current_token().class == TokenType::Lbrace
+                    {
+                        break;
+                    }
+                }
+                if stmt_tokens.is_empty() {
+                    self.consume();
+                    return Ok(None);
+                }
+                let stmt = self.make_statement(stmt_tokens);
+                match stmt {
+                    Ok(stmt) => Ok(Some(stmt)),
+                    Err(err) => Err(StmtErrors { errors: vec![err] }),
+                }
+            }
         }
     }
 
@@ -319,6 +392,16 @@ mod tests {
         }
     }
 
+    fn compare_block_parse_results(src: &[&str], expected: &[Block]) {
+        for (line, expect) in src.iter().zip(expected) {
+            let mut lexer = Lexer::new(line);
+            let tokens = lexer.lex();
+
+            let parse_result = Parser::new(&tokens).parse();
+            assert_eq!(&parse_result.unwrap(), expect);
+        }
+    }
+
     #[test]
     fn parse_binary_ops() {
         let src = ["4+5", "7-2", "8*2", "5/5"];
@@ -498,6 +581,57 @@ mod tests {
     }
 
     #[test]
+    fn parse_block() {
+        let src = vec![
+            "
+                {
+                    print a;
+                }
+            ",
+            "
+                let a = 5;
+                {
+                    let b = 4;
+                    a = 3;
+                }
+
+            ",
+            "
+                {
+                    {
+                        print 5;
+                        {
+                            {
+                            }
+                        }
+                    }
+                    print \"Hi\";
+                }
+            ",
+        ];
+        let expected = vec![
+            Block::new(vec![Stmt::Block(vec![Stmt::Print(Expr::Ident(
+                String::from("a"),
+            ))])]),
+            Block::new(vec![
+                Stmt::Assign(String::from('a'), Expr::new_num_literal(5)),
+                Stmt::Block(vec![
+                    Stmt::Assign(String::from('b'), Expr::new_num_literal(4)),
+                    Stmt::Reassign(String::from('a'), Expr::new_num_literal(3)),
+                ]),
+            ]),
+            Block::new(vec![Stmt::Block(vec![
+                Stmt::Block(vec![
+                    Stmt::Print(Expr::new_num_literal(5)),
+                    Stmt::Block(vec![Stmt::Block(Vec::new())]),
+                ]),
+                Stmt::Print(Expr::new_string_literal("Hi")),
+            ])]),
+        ];
+        compare_block_parse_results(&src, &expected);
+    }
+
+    #[test]
     fn test_expr_errors() {
         let src = vec!["5 + ;", "5 + 5 + \n", "5 + 5 + *", "5 + ="];
         let error = vec![
@@ -587,6 +721,64 @@ mod tests {
                 assert_eq!(errors.errors[0], err);
             } else {
                 panic!("Expected an error but got none");
+            }
+        }
+    }
+
+    #[test]
+    fn test_block_errors() {
+        let src = vec![
+            "
+                let a = 5; }
+            ",
+            "
+                let a = 5;
+                {}{}}
+                print \"Hello\"; {
+                print \"Hi\";
+            ",
+            "
+                {
+            ",
+        ];
+        let expected = vec![
+            StmtErrors {
+                errors: vec![StmtError::UnexpectedBlockClose(Token {
+                    class: TokenType::Rbrace,
+                    line: 2,
+                    start: 27,
+                })],
+            },
+            StmtErrors {
+                errors: vec![
+                    StmtError::UnexpectedBlockClose(Token {
+                        class: TokenType::Rbrace,
+                        line: 3,
+                        start: 20,
+                    }),
+                    StmtError::UnterminatedBlock(Token {
+                        class: TokenType::Lbrace,
+                        line: 4,
+                        start: 31,
+                    }),
+                ],
+            },
+            StmtErrors {
+                errors: vec![StmtError::UnterminatedBlock(Token {
+                    class: TokenType::Lbrace,
+                    line: 2,
+                    start: 16,
+                })],
+            },
+        ];
+        for (code, err) in src.iter().zip(expected) {
+            let mut lexer = Lexer::new(code);
+            let tokens = lexer.lex();
+            let parse_result = Parser::new(&tokens).parse();
+            if let Err(errors) = parse_result {
+                assert_eq!(errors, err);
+            } else {
+                panic!("Expected errors but got none");
             }
         }
     }

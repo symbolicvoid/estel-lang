@@ -137,11 +137,6 @@ impl Expr {
                 let right = right.solve(executor)?;
                 left.sub(right)
             }
-            Expr::Literal(literal) => Ok(literal.to_owned()),
-            Expr::Ident(name) => match executor.get_var(name) {
-                Some(literal) => Ok(literal),
-                None => Err(LiteralOpError::UndefinedVariableError),
-            },
             Expr::Greater(left, right) => {
                 let left = left.solve(executor)?;
                 let right = right.solve(executor)?;
@@ -190,6 +185,11 @@ impl Expr {
                 let expr = expr.solve(executor)?;
                 expr.negate()
             }
+            Expr::Ident(name) => match executor.get_var(name) {
+                Some(literal) => Ok(literal),
+                None => Err(LiteralOpError::UndefinedVariableError),
+            },
+            Expr::Literal(literal) => Ok(literal.to_owned()),
         }
     }
 }
