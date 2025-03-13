@@ -11,9 +11,11 @@ pub enum Stmt {
     Reassign(String, Expr),
     //Loop statement
     //While(Condition, Statements)
-    While(Expr, Vec<Stmt>),
+    While(Expr, Box<Stmt>),
     //Block of statements
     Block(Vec<Stmt>),
+    //No statement
+    None,
 }
 
 #[derive(Debug, PartialEq)]

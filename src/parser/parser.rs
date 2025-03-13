@@ -26,11 +26,7 @@ impl<'a> Parser<'a> {
                         stmts.push(stmt);
                     }
                 }
-                Err(errs) => {
-                    for err in errs.errors {
-                        errors.push(err);
-                    }
-                }
+                Err(mut errs) => errors.append(&mut errs.errors),
             }
         }
         //check if errors occured
@@ -65,11 +61,7 @@ impl<'a> Parser<'a> {
                                 stmts.push(stmt);
                             }
                         }
-                        Err(errs) => {
-                            for err in errs.errors {
-                                errors.push(err);
-                            }
-                        }
+                        Err(mut errs) => errors.append(&mut errs.errors),
                     }
                 }
                 //consume the right brace
@@ -78,6 +70,79 @@ impl<'a> Parser<'a> {
                     Ok(Some(Stmt::Block(stmts)))
                 } else {
                     Err(StmtErrors { errors })
+                }
+            }
+            //handle while loop
+            TokenType::Keyword(Keyword::While) => {
+                self.consume();
+                //look for parenthesis that specify the condition
+                if self.get_current_token().class != TokenType::Lparen {
+                    //error if no parenthesis
+                    return Err(StmtErrors {
+                        errors: vec![StmtError::ExpectToken(
+                            TokenType::Lparen,
+                            self.get_current_token().to_owned(),
+                        )],
+                    });
+                }
+                //save the parenthesis token incase of error
+                let paren_start = self.get_current_token().to_owned();
+                let mut errors = Vec::new();
+                self.consume();
+                //tokens of the condition expression
+                let mut condition_tokens = Vec::new();
+                //expression begins after left parenthesis and ends at a right parenthesis
+                while self.get_current_token().class != TokenType::Rparen {
+                    if self.get_current_token().class == TokenType::Eof
+                        || self.get_current_token().class == TokenType::Lbrace
+                        || self.get_current_token().class == TokenType::Rbrace
+                    {
+                        errors.push(StmtError::UnterminatedParenthesis(paren_start));
+                        return Err(StmtErrors { errors });
+                    }
+                    condition_tokens.push(self.get_current_token().to_owned());
+                    self.consume();
+                }
+                //create an expression for the loop condition
+                let expr = self.make_expr(condition_tokens);
+                let cond = match expr {
+                    Ok(expr) => {
+                        match expr {
+                            Some(expr) => expr,
+                            //error for missing expression
+                            None => {
+                                errors.push(StmtError::ExpectedExpression(paren_start));
+                                //consume the right parenthesis
+                                self.consume();
+                                return Err(StmtErrors { errors });
+                            }
+                        }
+                    }
+                    //error for invalid expressions
+                    Err(expr_error) => {
+                        errors.push(StmtError::InvalidExpression(expr_error));
+                        //consume the right parenthesis
+                        self.consume();
+                        return Err(StmtErrors { errors });
+                    }
+                };
+                //consume the right parenthesis
+                self.consume();
+                //parse the body of the loop
+                let stmts = self.make_block();
+                match stmts {
+                    Ok(option_stmt) => match option_stmt {
+                        Some(body) => {
+                            Ok(Some(Stmt::While(cond, Box::new(body))))
+                        }
+                        None => {
+                            Ok(Some(Stmt::While(cond, Box::new(Stmt::None))))
+                        }
+                    },
+                    Err(mut errs) => {
+                        errors.append(&mut errs.errors);
+                        Err(StmtErrors { errors })
+                    }
                 }
             }
             //handle right braces with no corresponding left brace
@@ -392,7 +457,7 @@ mod tests {
         }
     }
 
-    fn compare_block_parse_results(src: &[&str], expected: &[Block]) {
+    fn compare_parse_results(src: &[&str], expected: &[Block]) {
         for (line, expect) in src.iter().zip(expected) {
             let mut lexer = Lexer::new(line);
             let tokens = lexer.lex();
@@ -628,7 +693,110 @@ mod tests {
                 Stmt::Print(Expr::new_string_literal("Hi")),
             ])]),
         ];
-        compare_block_parse_results(&src, &expected);
+        compare_parse_results(&src, &expected);
+    }
+
+    #[test]
+    fn parse_while() {
+        let src = vec![
+            "
+                while (a < 5){
+                    print a;
+                    a = a + 1;
+                }
+            ",
+            "
+                while (a < 5){
+                    while (b < 5){
+                        print b;
+                        b = b + 1;
+                    }
+                    print a;
+                    a = a + 1;
+                }
+            ",
+            "
+                {while (true){
+                    let a = 5;
+                    {
+                        let b = 7;
+                        a = a + b;
+                    }
+                    print a;
+                    a = a + 1;
+                }}
+            ",
+        ];
+        let expected = vec![
+            Block::new(vec![Stmt::While(
+                Expr::new_less(Expr::new_ident("a"), Expr::new_num_literal(5)),
+                Box::new(Stmt::Block(vec![
+                    Stmt::Print(Expr::Ident(String::from("a"))),
+                    Stmt::Reassign(
+                        String::from("a"),
+                        Expr::new_add(Expr::Ident(String::from("a")), Expr::new_num_literal(1)),
+                    ),
+                ])),
+            )]),
+            Block::new(vec![Stmt::While(
+                Expr::new_less(Expr::new_ident("a"), Expr::new_num_literal(5)),
+                Box::new(Stmt::Block(vec![
+                    Stmt::While(
+                        Expr::new_less(Expr::new_ident("b"), Expr::new_num_literal(5)),
+                        Box::new(Stmt::Block(vec![
+                            Stmt::Print(Expr::Ident(String::from("b"))),
+                            Stmt::Reassign(
+                                String::from("b"),
+                                Expr::new_add(
+                                    Expr::Ident(String::from("b")),
+                                    Expr::new_num_literal(1),
+                                ),
+                            ),
+                        ])),
+                    ),
+                    Stmt::Print(Expr::Ident(String::from("a"))),
+                    Stmt::Reassign(
+                        String::from("a"),
+                        Expr::new_add(Expr::Ident(String::from("a")), Expr::new_num_literal(1)),
+                    ),
+                ])),
+            )]),
+            Block::new(vec![Stmt::Block(vec![Stmt::While(
+                Expr::new_bool_literal(true),
+                Box::new(Stmt::Block(vec![
+                    Stmt::Assign(String::from("a"), Expr::new_num_literal(5)),
+                    Stmt::Block(vec![
+                        Stmt::Assign(String::from("b"), Expr::new_num_literal(7)),
+                        Stmt::Reassign(
+                            String::from("a"),
+                            Expr::new_add(
+                                Expr::Ident(String::from("a")),
+                                Expr::Ident(String::from("b")),
+                            ),
+                        ),
+                    ]),
+                    Stmt::Print(Expr::Ident(String::from("a"))),
+                    Stmt::Reassign(
+                        String::from("a"),
+                        Expr::new_add(Expr::Ident(String::from("a")), Expr::new_num_literal(1)),
+                    ),
+                ])),
+            )])]),
+        ];
+        compare_parse_results(&src, &expected);
+    }
+
+    fn compare_stmt_errors(src: &[&str], expected: &[StmtErrors]) {
+        for (code, err) in src.iter().zip(expected) {
+            let mut lexer = Lexer::new(code);
+            let tokens = lexer.lex();
+            let parse_result = Parser::new(&tokens).parse();
+            if let Err(errors) = parse_result {
+                assert_eq!(&errors, err);
+            } else {
+                panic!("Expected errors but got none");
+            }
+        }
     }
 
     #[test]
@@ -727,7 +895,7 @@ mod tests {
 
     #[test]
     fn test_block_errors() {
-        let src = vec![
+        let src = [
             "
                 let a = 5; }
             ",
@@ -741,7 +909,7 @@ mod tests {
                 {
             ",
         ];
-        let expected = vec![
+        let expected = [
             StmtErrors {
                 errors: vec![StmtError::UnexpectedBlockClose(Token {
                     class: TokenType::Rbrace,
@@ -771,15 +939,42 @@ mod tests {
                 })],
             },
         ];
-        for (code, err) in src.iter().zip(expected) {
-            let mut lexer = Lexer::new(code);
-            let tokens = lexer.lex();
-            let parse_result = Parser::new(&tokens).parse();
-            if let Err(errors) = parse_result {
-                assert_eq!(errors, err);
-            } else {
-                panic!("Expected errors but got none");
-            }
-        }
+        compare_stmt_errors(&src, &expected);
+    }
+
+    #[test]
+    fn test_while_errors() {
+        let src = [
+            "while(){print a;}",
+            "while(a){print b;",
+            "while(a +) print c;",
+        ];
+        let expected = [
+            StmtErrors {
+                errors: vec![StmtError::ExpectedExpression(Token {
+                    class: TokenType::Lparen,
+                    line: 1,
+                    start: 5,
+                })],
+            },
+            StmtErrors {
+                errors: vec![StmtError::UnterminatedBlock(Token {
+                    class: TokenType::Lbrace,
+                    line: 1,
+                    start: 8,
+                })],
+            },
+            StmtErrors {
+                errors: vec![StmtError::InvalidExpression(ExprError::ExpectTokenError(
+                    ExpectType::Operand,
+                    Token {
+                        class: TokenType::Rparen,
+                        line: 1,
+                        start: 9,
+                    },
+                ))],
+            },
+        ];
+        compare_stmt_errors(&src, &expected);
     }
 }

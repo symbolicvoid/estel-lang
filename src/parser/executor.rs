@@ -94,13 +94,12 @@ impl Executor {
                     }
                 }
             }
-            Stmt::While(expr, stmts) => {
+            Stmt::While(expr, stmt) => {
                 let res = expr.solve(self);
                 match res {
                     Ok(mut cond) => {
                         while cond.is_truthy() {
-                            let block = Block::new(stmts.to_owned());
-                            self.execute_block(block);
+                            self.execute_statement(stmt);
                             cond = match expr.solve(self) {
                                 Ok(res) => res,
                                 Err(err) => {
@@ -119,6 +118,7 @@ impl Executor {
                 let block = Block::new(stmts.to_owned());
                 self.execute_block(block);
             }
+            Stmt::None => {}
         }
     }
 
@@ -360,7 +360,7 @@ mod tests {
                 Stmt::Assign(String::from("b"), Expr::new_num_literal(3)),
                 Stmt::While(
                     Expr::new_not_equal(Expr::new_ident("a"), Expr::new_num_literal(0)),
-                    vec![
+                    Box::new(Stmt::Block(vec![
                         Stmt::Reassign(
                             String::from("b"),
                             Expr::new_add(Expr::new_ident("b"), Expr::new_num_literal(1)),
@@ -369,7 +369,7 @@ mod tests {
                             String::from("a"),
                             Expr::new_sub(Expr::new_ident("a"), Expr::new_num_literal(1)),
                         ),
-                    ],
+                    ])),
                 ),
             ]),
             /*
@@ -386,7 +386,7 @@ mod tests {
                 Stmt::Assign(String::from("i"), Expr::new_num_literal(3)),
                 Stmt::While(
                     Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
-                    vec![
+                    Box::new(Stmt::Block(vec![
                         Stmt::Reassign(
                             String::from("b"),
                             Expr::new_add(Expr::new_ident("b"), Expr::new_ident("a")),
@@ -395,7 +395,7 @@ mod tests {
                             String::from("i"),
                             Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
                         ),
-                    ],
+                    ])),
                 ),
             ]),
             /*
@@ -417,7 +417,7 @@ mod tests {
                         Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
                         Expr::new_ident("a"),
                     ),
-                    vec![
+                    Box::new(Stmt::Block(vec![
                         Stmt::Reassign(
                             String::from("num"),
                             Expr::new_add(Expr::new_ident("num"), Expr::new_num_literal(1)),
@@ -433,7 +433,7 @@ mod tests {
                             String::from("i"),
                             Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
                         ),
-                    ],
+                    ])),
                 ),
             ]),
         ];
@@ -493,10 +493,10 @@ mod tests {
                 Stmt::Assign(String::from("j"), Expr::new_num_literal(5)),
                 Stmt::While(
                     Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
-                    vec![
+                    Box::new(Stmt::Block(vec![
                         Stmt::While(
                             Expr::new_not_equal(Expr::new_ident("j"), Expr::new_num_literal(0)),
-                            vec![
+                            Box::new(Stmt::Block(vec![
                                 Stmt::Reassign(
                                     String::from("a"),
                                     Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(1)),
@@ -505,14 +505,14 @@ mod tests {
                                     String::from("j"),
                                     Expr::new_sub(Expr::new_ident("j"), Expr::new_num_literal(1)),
                                 ),
-                            ],
+                            ])),
                         ),
                         Stmt::Reassign(
                             String::from("i"),
                             Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
                         ),
                         Stmt::Reassign(String::from("j"), Expr::new_num_literal(5)),
-                    ],
+                    ])),
                 ),
             ]),
             /*
@@ -531,7 +531,7 @@ mod tests {
                 Stmt::Assign(String::from("i"), Expr::new_num_literal(5)),
                 Stmt::While(
                     Expr::new_not_equal(Expr::new_ident("i"), Expr::new_num_literal(0)),
-                    vec![
+                    Box::new(Stmt::Block(vec![
                         Stmt::While(
                             Expr::new_or(
                                 Expr::new_not_equal(
@@ -540,10 +540,10 @@ mod tests {
                                 ),
                                 Expr::new_less(Expr::new_ident("a"), Expr::new_num_literal(10)),
                             ),
-                            vec![Stmt::Reassign(
+                            Box::new(Stmt::Block(vec![Stmt::Reassign(
                                 String::from("a"),
                                 Expr::new_add(Expr::new_ident("a"), Expr::new_num_literal(1)),
-                            )],
+                            )])),
                         ),
                         Stmt::Reassign(
                             String::from("a"),
@@ -553,7 +553,7 @@ mod tests {
                             String::from("i"),
                             Expr::new_sub(Expr::new_ident("i"), Expr::new_num_literal(1)),
                         ),
-                    ],
+                    ])),
                 ),
             ]),
         ];

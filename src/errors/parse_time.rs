@@ -55,6 +55,7 @@ pub enum StmtError {
     InvalidExpression(ExprError),
     ExpectedExpression(Token),
     IncompleteStatement(Token),
+    UnterminatedParenthesis(Token),
     UnterminatedBlock(Token),
     UnexpectedBlockClose(Token),
 }
@@ -73,6 +74,7 @@ impl StmtError {
             Self::InvalidExpression(error) => error.get_message().to_string(),
             Self::ExpectedExpression(_) => String::from("Expected an expression"),
             Self::IncompleteStatement(_) => String::from("Incomplete statement"),
+            Self::UnterminatedParenthesis(_) => String::from("Unterminated parenthesis"),
             Self::UnterminatedBlock(_) => String::from("Unterminated block"),
             Self::UnexpectedBlockClose(_) => String::from("Unexpected block termination"),
         }
@@ -85,6 +87,7 @@ impl StmtError {
             Self::InvalidExpression(error) => error.get_position(),
             Self::ExpectedExpression(token) => (token.line, token.start),
             Self::IncompleteStatement(token) => (token.line, token.start),
+            Self::UnterminatedParenthesis(token) => (token.line, token.start),
             Self::UnterminatedBlock(token) => (token.line, token.start),
             Self::UnexpectedBlockClose(token) => (token.line, token.start),
         }

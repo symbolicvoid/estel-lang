@@ -1,0 +1,12 @@
+let a = 5;
+while (a > 0) {
+    print("Hello World!");
+    a = a - 1;
+}
+let b = "*";
+while(a < 5){
+    print b*(a+1);
+    a = a + 1;
+}
+let c = 200000;
+while(c > 0) c=c-1 

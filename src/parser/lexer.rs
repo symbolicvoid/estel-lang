@@ -188,8 +188,8 @@ impl Lexer {
                         return TokenType::Error(LexError::InvalidTokenError);
                     }
                 }
-                ' ' | '\r' | '\n' | '\t' | ';' | ')' | '}' | '+' | '-' | '*' | '/' | '%' | '='
-                | '>' | '<' => {
+                ' ' | '\r' | '\n' | '\t' | ';' | '(' | ')' | '{' | '}' | '+' | '-' | '*' | '/'
+                | '%' | '=' | '>' | '<' => {
                     break;
                 }
                 _ => return TokenType::Error(LexError::InvalidTokenError),
@@ -357,6 +357,11 @@ mod tests {
             TokenType::Keyword(Keyword::Print),
             lexer.lex_keyword_or_identifier()
         );
+        lexer = Lexer::new("while(true)");
+        assert_eq!(
+            TokenType::Keyword(Keyword::While),
+            lexer.lex_keyword_or_identifier()
+        );
 
         //lex valid identifiers
         lexer = Lexer::new("hello");
@@ -387,7 +392,7 @@ mod tests {
             lexer.lex_keyword_or_identifier()
         );
 
-        //lex and/not
+        //lex and/or
         lexer = Lexer::new("and");
         assert_eq!(
             TokenType::new_operator("and"),
@@ -458,6 +463,31 @@ mod tests {
             Token {
                 class: TokenType::Eof,
                 start: 5,
+                line: 1,
+            },
+        ];
+        assert!(compare_lexer_outputs(expected.to_vec(), lexer.lex()));
+
+        let mut lexer = Lexer::new("10%3");
+        let expected = [
+            Token {
+                class: TokenType::new_number_literal("10"),
+                start: 0,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Operator(Operator::Mod),
+                start: 2,
+                line: 1,
+            },
+            Token {
+                class: TokenType::new_number_literal("3"),
+                start: 3,
+                line: 1,
+            },
+            Token {
+                class: TokenType::Eof,
+                start: 4,
                 line: 1,
             },
         ];
