@@ -12,6 +12,8 @@ pub enum Stmt {
     //Loop statement
     //While(Condition, Statements)
     While(Expr, Box<Stmt>),
+    //If(Condition, True Statement, False Statement)
+    If(Expr, Box<Stmt>, Box<Stmt>),
     //Block of statements
     Block(Vec<Stmt>),
     //No statement

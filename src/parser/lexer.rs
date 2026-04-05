@@ -362,6 +362,16 @@ mod tests {
             TokenType::Keyword(Keyword::While),
             lexer.lex_keyword_or_identifier()
         );
+        lexer = Lexer::new("if(false");
+        assert_eq!(
+            TokenType::Keyword(Keyword::If),
+            lexer.lex_keyword_or_identifier()
+        );
+        lexer = Lexer::new("else");
+        assert_eq!(
+            TokenType::Keyword(Keyword::Else),
+            lexer.lex_keyword_or_identifier()
+        );
 
         //lex valid identifiers
         lexer = Lexer::new("hello");

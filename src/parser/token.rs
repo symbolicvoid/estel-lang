@@ -347,6 +347,9 @@ pub enum Keyword {
     Let,
     //Loop statement keywords
     While,
+    //Conditional keywords
+    If,
+    Else,
 }
 
 impl Keyword {
@@ -355,6 +358,8 @@ impl Keyword {
             "print" => Some(Self::Print),
             "let" => Some(Self::Let),
             "while" => Some(Self::While),
+            "if" => Some(Self::If),
+            "else" => Some(Self::Else),
             _ => None,
         }
     }

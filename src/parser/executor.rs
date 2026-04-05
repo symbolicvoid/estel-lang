@@ -114,6 +114,21 @@ impl Executor {
                     }
                 }
             }
+            Stmt::If(expr, true_stmt, false_stmt) => {
+                let res = expr.solve(self);
+                match res {
+                    Ok(cond) => {
+                        if cond.is_truthy() {
+                            self.execute_statement(true_stmt);
+                        } else {
+                            self.execute_statement(false_stmt);
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("{:?}", err);
+                    }
+                }
+            }
             Stmt::Block(stmts) => {
                 let block = Block::new(stmts.to_owned());
                 self.execute_block(block);
@@ -577,5 +592,438 @@ mod tests {
             ),
         ];
         compare_scopes(blocks, expected_scope);
+    }
+
+    #[test]
+    fn test_basic_if_else(){
+        let blocks = vec![
+            /*
+            let a = 5;
+            let isEven = false;
+            if(a%2==0){
+                isEven = true;
+                print "A is even"
+            }else{
+                print "A is odd"
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(5)),
+                Stmt::Assign(String::from("isEven"), Expr::new_bool_literal(false)),
+                Stmt::If(
+                    Expr::new_equal(
+                        Expr::new_mod(Expr::new_ident("a"), Expr::new_num_literal(2)),
+                        Expr::new_num_literal(0),
+                    ),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::Reassign(String::from("isEven"), Expr::new_bool_literal(true)),
+                        Stmt::Print(Expr::new_string_literal("A is even")),
+                    ])),
+                    Box::new(Stmt::Block(vec![Stmt::Print(Expr::new_string_literal("A is odd"))])),
+                ),
+            ]),
+            /*
+            let a = 7;
+            let isPrime = true;
+            let i = 2;
+            while(i <= a/2 and isPrime){
+                if(a%i==0){
+                    isPrime = false;
+                    print "A is not prime"
+                }
+                i = i + 1;
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(7)),
+                Stmt::Assign(String::from("isPrime"), Expr::new_bool_literal(true)),
+                Stmt::Assign(String::from("i"), Expr::new_num_literal(2)),
+                Stmt::While(
+                    Expr::new_and(
+                        Expr::new_less_equal(
+                            Expr::new_ident("i"),
+                            Expr::new_div(Expr::new_ident("a"), Expr::new_num_literal(2)),
+                        ),
+                        Expr::new_ident("isPrime"),
+                    ),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_equal(
+                                Expr::new_mod(Expr::new_ident("a"), Expr::new_ident("i")),
+                                Expr::new_num_literal(0),
+                            ),
+                            Box::new(Stmt::Block(vec![
+                                Stmt::Reassign(String::from("isPrime"), Expr::new_bool_literal(false)),
+                                Stmt::Print(Expr::new_string_literal("A is not prime")),
+                            ])),
+                            Box::new(Stmt::None),
+                        ),
+                        Stmt::Reassign(
+                            String::from("i"),
+                            Expr::new_add(Expr::new_ident("i"), Expr::new_num_literal(1)),
+                        ),
+                    ])),
+                ),
+            ]),
+        ];
+        let expected_scope = vec![
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(5)),
+                    (String::from("isEven"), Literal::Bool(false)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(7)),
+                    (String::from("isPrime"), Literal::Bool(true)),
+                    (String::from("i"), Literal::Number(4)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        ];
+        compare_scopes(blocks, expected_scope);
+    }
+
+    #[test]
+    fn test_nested_and_ladder_if(){
+        let src = vec![
+            /*
+            let a = 5;
+            let b = 3;
+            let c = 7;
+            let largest = "";
+            if(a > b){
+                if(a > c){
+                    largest = 'a';
+                }else{
+                    largest = 'c';
+                }
+            }else{
+                if(b > c){
+                    largest = 'b';
+                }else{
+                    largest = 'c';
+                }
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(5)),
+                Stmt::Assign(String::from("b"), Expr::new_num_literal(3)),
+                Stmt::Assign(String::from("c"), Expr::new_num_literal(7)),
+                Stmt::Assign(String::from("largest"), Expr::new_string_literal("")),
+                Stmt::If(
+                    Expr::new_greater(Expr::new_ident("a"), Expr::new_ident("b")),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_greater(Expr::new_ident("a"), Expr::new_ident("c")),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("a"),
+                            )),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("c"),
+                            )),
+                        ),
+                    ])),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_greater(Expr::new_ident("b"), Expr::new_ident("c")),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("b"),
+                            )),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("c"),
+                            )),
+                        ),
+                    ])),
+                ),
+            ]),
+            /*
+            let a = 15;
+            let b = 6;
+            let c = 8;
+            let largest = "";
+            if(a > b){
+                if(a > c){
+                    largest = 'a';
+                }else{
+                    largest = 'c';
+                }
+            }else{
+                if(b > c){
+                    largest = 'b';
+                }else{
+                    largest = 'c';
+                }
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(15)),
+                Stmt::Assign(String::from("b"), Expr::new_num_literal(6)),
+                Stmt::Assign(String::from("c"), Expr::new_num_literal(8)),
+                Stmt::Assign(String::from("largest"), Expr::new_string_literal("")),
+                Stmt::If(
+                    Expr::new_greater(Expr::new_ident("a"), Expr::new_ident("b")),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_greater(Expr::new_ident("a"), Expr::new_ident("c")),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("a"),
+                            )),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("c"),
+                            )),
+                        ),
+                    ])),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_greater(Expr::new_ident("b"), Expr::new_ident("c")),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("b"),
+                            )),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("c"),
+                            )),
+                        ),
+                    ])),
+                ),
+            ]),
+            /*
+            let a = 12;
+            let b = 75;
+            let c = 45;
+            let largest = "";
+            if(a > b){
+                if(a > c){
+                    largest = 'a';
+                }else{
+                    largest = 'c';
+                }
+            }else{
+                if(b > c){
+                    largest = 'b';
+                }else{
+                    largest = 'c';
+                }
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("a"), Expr::new_num_literal(12)),
+                Stmt::Assign(String::from("b"), Expr::new_num_literal(75)),
+                Stmt::Assign(String::from("c"), Expr::new_num_literal(45)),
+                Stmt::Assign(String::from("largest"), Expr::new_string_literal("")),
+                Stmt::If(
+                    Expr::new_greater(Expr::new_ident("a"), Expr::new_ident("b")),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_greater(Expr::new_ident("a"), Expr::new_ident("c")),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("a"),
+                            )),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("c"),
+                            )),
+                        ),
+                    ])),
+                    Box::new(Stmt::Block(vec![
+                        Stmt::If(
+                            Expr::new_greater(Expr::new_ident("b"), Expr::new_ident("c")),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("b"),
+                            )),
+                            Box::new(Stmt::Reassign(
+                                String::from("largest"),
+                                Expr::new_string_literal("c"),
+                            )),
+                        ),
+                    ])),
+                ),
+            ]),
+            /*
+            let score = 76;
+            let grade = "";
+            if(score >= 90){
+                grade = "A";
+            }else if(score >= 80){
+                grade = "B";
+            }else if(score >= 70){
+                grade = "C";
+            }else if(score >= 60){
+                grade = "D";
+            }else{
+                grade = "F";
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("score"), Expr::new_num_literal(76)),
+                Stmt::Assign(String::from("grade"), Expr::new_string_literal("")),
+                Stmt::If(
+                    Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(90)),
+                    Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("A"))),
+                    Box::new(Stmt::If(
+                        Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(80)),
+                        Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("B"))),
+                        Box::new(Stmt::If(
+                            Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(70)),
+                            Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("C"))),
+                            Box::new(Stmt::If(
+                                Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(60)),
+                                Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("D"))),
+                                Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("F"))),
+                            )),
+                        )),
+                    )),
+                ),
+            ]),
+            /*
+            let score = 42;
+            let grade = "";
+            if(score >= 90){
+                grade = "A";
+            }else if(score >= 80){
+                grade = "B";
+            }else if(score >= 70){
+                grade = "C";
+            }else if(score >= 60){
+                grade = "D";
+            }else{
+                grade = "F";
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("score"), Expr::new_num_literal(42)),
+                Stmt::Assign(String::from("grade"), Expr::new_string_literal("")),
+                Stmt::If(
+                    Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(90)),
+                    Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("A"))),
+                    Box::new(Stmt::If(
+                        Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(80)),
+                        Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("B"))),
+                        Box::new(Stmt::If(
+                            Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(70)),
+                            Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("C"))),
+                            Box::new(Stmt::If(
+                                Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(60)),
+                                Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("D"))),
+                                Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("F"))),
+                            )),
+                        )),
+                    )),
+                ),
+            ]),
+            /*
+            let score = 99;
+            let grade = "";
+            if(score >= 90){
+                grade = "A";
+            }else if(score >= 80){
+                grade = "B";
+            }else if(score >= 70){
+                grade = "C";
+            }else if(score >= 60){
+                grade = "D";
+            }else{
+                grade = "F";
+            }
+            */
+            Block::new(vec![
+                Stmt::Assign(String::from("score"), Expr::new_num_literal(99)),
+                Stmt::Assign(String::from("grade"), Expr::new_string_literal("")),
+                Stmt::If(
+                    Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(90)),
+                    Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("A"))),
+                    Box::new(Stmt::If(
+                        Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(80)),
+                        Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("B"))),
+                        Box::new(Stmt::If(
+                            Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(70)),
+                            Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("C"))),
+                            Box::new(Stmt::If(
+                                Expr::new_greater_equal(Expr::new_ident("score"), Expr::new_num_literal(60)),
+                                Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("D"))),
+                                Box::new(Stmt::Reassign(String::from("grade"), Expr::new_string_literal("F"))),
+                            )),
+                        )),
+                    )),
+                ),
+            ]),
+        ];
+        let expected_scope = vec![
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(5)),
+                    (String::from("b"), Literal::Number(3)),
+                    (String::from("c"), Literal::Number(7)),
+                    (String::from("largest"), Literal::String(String::from("c")),
+                    )
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(15)),
+                    (String::from("b"), Literal::Number(6)),
+                    (String::from("c"), Literal::Number(8)),
+                    (String::from("largest"), Literal::String(String::from("a")),
+                    )
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("a"), Literal::Number(12)),
+                    (String::from("b"), Literal::Number(75)),
+                    (String::from("c"), Literal::Number(45)),
+                    (String::from("largest"), Literal::String(String::from("b")),
+                    )
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("score"), Literal::Number(76)),
+                    (String::from("grade"), Literal::String(String::from("C")),
+                    )
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("score"), Literal::Number(42)),
+                    (String::from("grade"), Literal::String(String::from("F")),
+                    )
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            Scope::from_hashmap(
+                vec![
+                    (String::from("score"), Literal::Number(99)),
+                    (String::from("grade"), Literal::String(String::from("A")),
+                    )
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        ];
+        compare_scopes(src, expected_scope);
     }
 }

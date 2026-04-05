@@ -75,59 +75,15 @@ impl<'a> Parser<'a> {
             //handle while loop
             TokenType::Keyword(Keyword::While) => {
                 self.consume();
-                //look for parenthesis that specify the condition
-                if self.get_current_token().class != TokenType::Lparen {
-                    //error if no parenthesis
-                    return Err(StmtErrors {
-                        errors: vec![StmtError::ExpectToken(
-                            TokenType::Lparen,
-                            self.get_current_token().to_owned(),
-                        )],
-                    });
-                }
-                //save the parenthesis token incase of error
-                let paren_start = self.get_current_token().to_owned();
                 let mut errors = Vec::new();
-                self.consume();
-                //tokens of the condition expression
-                let mut condition_tokens = Vec::new();
-                //expression begins after left parenthesis and ends at a right parenthesis
-                while self.get_current_token().class != TokenType::Rparen {
-                    if self.get_current_token().class == TokenType::Eof
-                        || self.get_current_token().class == TokenType::Lbrace
-                        || self.get_current_token().class == TokenType::Rbrace
-                    {
-                        errors.push(StmtError::UnterminatedParenthesis(paren_start));
-                        return Err(StmtErrors { errors });
-                    }
-                    condition_tokens.push(self.get_current_token().to_owned());
-                    self.consume();
-                }
-                //create an expression for the loop condition
-                let expr = self.make_expr(condition_tokens);
-                let cond = match expr {
-                    Ok(expr) => {
-                        match expr {
-                            Some(expr) => expr,
-                            //error for missing expression
-                            None => {
-                                errors.push(StmtError::ExpectedExpression(paren_start));
-                                //consume the right parenthesis
-                                self.consume();
-                                return Err(StmtErrors { errors });
-                            }
-                        }
-                    }
-                    //error for invalid expressions
-                    Err(expr_error) => {
-                        errors.push(StmtError::InvalidExpression(expr_error));
-                        //consume the right parenthesis
-                        self.consume();
-                        return Err(StmtErrors { errors });
+                let cond = match self.extract_condition() {
+                    Ok(expr) => expr,
+                    Err(err) => {
+                        return Err(StmtErrors { errors: vec![err] });
                     }
                 };
-                //consume the right parenthesis
-                self.consume();
+                //consume empty lines
+                self.consume_stmt_end();
                 //parse the body of the loop
                 let stmts = self.make_block();
                 match stmts {
@@ -144,6 +100,59 @@ impl<'a> Parser<'a> {
                         Err(StmtErrors { errors })
                     }
                 }
+            }
+            //handle if else statement
+            TokenType::Keyword(Keyword::If) => {
+                self.consume();
+                let mut errors = Vec::new();
+                let cond = match self.extract_condition() {
+                    Ok(expr) => expr,
+                    Err(err) => {
+                        return Err(StmtErrors { errors: vec![err] });
+                    }
+                };
+                //consume empty lines
+                self.consume_stmt_end();
+                let if_block = match self.make_block(){
+                    Ok(option_stmt) => match option_stmt{
+                        Some(stmt) => stmt,
+                        None => Stmt::None
+                    },
+                    Err(mut errs) => {
+                        errors.append(&mut errs.errors);
+                        Stmt::None
+                    }
+                };
+                //consume empty lines
+                self.consume_stmt_end();
+                //check for else block
+                if let TokenType::Keyword(Keyword::Else) = self.get_current_token().class{
+                    self.consume();
+                    let else_block = match self.make_block(){
+                        Ok(option_stmt) => match option_stmt{
+                            Some(stmt) => stmt,
+                            None => Stmt::None
+                        },
+                        Err(mut errs) => {
+                            errors.append(&mut errs.errors);
+                            return Err(StmtErrors { errors });
+                        }
+                    };
+                    Ok(Some(Stmt::If(cond, Box::new(if_block), Box::new(else_block)))
+                    )
+                }else{
+                    //check if errors occured in if block
+                    if !errors.is_empty(){
+                        return Err(StmtErrors { errors });
+                    }
+                    Ok(Some(Stmt::If(cond, Box::new(if_block), Box::new(Stmt::None))))
+                }
+            }
+            //handle else block wihout if
+            TokenType::Keyword(Keyword::Else) => {
+                let else_token = self.get_current_token().to_owned();
+                self.consume();
+                Err(StmtErrors { errors: vec![StmtError::ElseWithoutIf(else_token)] })
             }
             //handle right braces with no corresponding left brace
             TokenType::Rbrace => {
@@ -272,7 +281,7 @@ impl<'a> Parser<'a> {
     fn make_expr(&mut self, mut tokens: Vec<Token>) -> Result<Option<Expr>, ExprError> {
         let mut operands: Vec<Expr> = Vec::new();
         let mut operators: Vec<Token> = Vec::new();
-        //Holds the currently expected token, eg- expecting an operator after operand
+        //Holds the currently expected token, ex: expecting an operator after operand
         let mut expect = ExpectType::Operand;
         tokens.reverse();
 
@@ -416,6 +425,62 @@ impl<'a> Parser<'a> {
                 //using the expression's error
                 Err(StmtError::InvalidExpression(err))
             }
+        }
+    }
+
+    //extrace an expression between two parenthesis
+    //leaves the position at the token after the right parenthesis
+    fn extract_condition(&mut self) -> Result<Expr, StmtError> {
+        //look for parenthesis that specify the condition
+        if self.get_current_token().class != TokenType::Lparen {
+            //error if no parenthesis
+            return Err(StmtError::ExpectToken(
+                    TokenType::Lparen,
+                    self.get_current_token().to_owned(),
+                ));
+        };
+        
+        //save the parenthesis token incase of error
+        let paren_start = self.get_current_token().to_owned();
+        self.consume();
+        //tokens of the condition expression
+        let mut condition_tokens = Vec::new();
+        //expression begins after left parenthesis and ends at a right parenthesis
+        while self.get_current_token().class != TokenType::Rparen {
+            if self.get_current_token().class == TokenType::Eof
+                || self.get_current_token().class == TokenType::Lbrace
+                || self.get_current_token().class == TokenType::Rbrace
+            {
+                return Err(StmtError::UnterminatedParenthesis(paren_start));
+            }
+            condition_tokens.push(self.get_current_token().to_owned());
+            self.consume();
+        }
+        //create the expression
+        let expr = self.make_expr(condition_tokens);
+        //consume the right parenthesis
+        self.consume();
+        match expr {
+            Ok(expr) => {
+                match expr {
+                    Some(expr) => Ok(expr),
+                    //error for missing expression
+                    None => {    
+                        Err(StmtError::ExpectedExpression(paren_start))
+                    }
+                }
+            }
+            //error for invalid expressions
+            Err(expr_error) => {
+                Err(StmtError::InvalidExpression(expr_error))
+            }
+        }
+    }
+
+    //advance to the next token after end of statement tokens
+    fn consume_stmt_end(&mut self) {
+        while self.get_current_token().class == TokenType::StmtEnd {
+            self.consume();
         }
     }
 
@@ -782,6 +847,110 @@ mod tests {
                     ),
                 ])),
             )])]),
+        ];
+        compare_parse_results(&src, &expected);
+    }
+
+    #[test]
+    fn parse_if(){
+        let src = vec![
+            "
+                if (a < 5){
+                    print a;
+                    a = a + 1;
+                }
+            ",
+            "
+                if (a < 5){
+                    if (b < 5){
+                        print b;
+                        b = b + 1;
+                    }
+                    print a;
+                    a = a + 1;
+                }
+            ",
+            "
+                {if (true){
+                    let a = 5;
+                    {
+                        let b = 7;
+                        a = a + b;
+                    }
+                    print a;
+                    a = a + 1;
+                }}
+            ",
+            "
+                if (a < 5){
+                    print a;
+                    a = a + 1;
+                }else{
+                    print b;
+                    b = b + 1;
+                }
+            ",
+            "
+                if (a < 5){
+                    print a;
+                    a = a + 1;
+                }else if (a < 10){
+                    print b;
+                    b = b + 1;
+                }else if (a < 15){
+                    print c;
+                    c = c + 1;
+                }else{
+                    print d;
+                    d = d + 1;
+                }
+            ",
+            "
+                if (a < 5){
+                    print a;
+                    a = a + 1;
+                }else{
+                    while (b < 5){
+                        print b;
+                        b = b + 1;
+                    }
+                }
+            ",
+        ];
+        let expected = vec![
+            Block::new(vec![Stmt::If(
+                Expr::new_less(Expr::new_ident("a"), Expr::new_num_literal(5)),
+                Box::new(Stmt::Block(vec![
+                    Stmt::Print(Expr::Ident(String::from("a"))),
+                    Stmt::Reassign(
+                        String::from("a"),
+                        Expr::new_add(Expr::Ident(String::from("a")), Expr::new_num_literal(1)),
+                    ),
+                ])),
+                Box::new(Stmt::None),
+            )]),
+            Block::new(vec![Stmt::If(
+                Expr::new_less(Expr::new_ident("a"), Expr::new_num_literal(5)),
+                Box::new(Stmt::Block(vec![
+                    Stmt::If(
+                        Expr::new_less(Expr::new_ident("b"), Expr::new_num_literal(5)),
+                        Box::new(Stmt::Block(vec![
+                            Stmt::Print(Expr::Ident(String::from("b"))),
+                            Stmt::Reassign(
+                                String::from("b"),
+                                Expr::new_add(Expr::Ident(String::from("b")), Expr::new_num_literal(1)),
+                            ),
+                        ])),
+                        Box::new(Stmt::None),
+                    ),
+                    Stmt::Print(Expr::Ident(String::from("a"))),
+                    Stmt::Reassign(
+                        String::from("a"),
+                        Expr::new_add(Expr::Ident(String::from("a")), Expr::new_num_literal(1)),
+                    ),
+                ])),
+                Box::new(Stmt::None),
+            )]),
         ];
         compare_parse_results(&src, &expected);
     }
